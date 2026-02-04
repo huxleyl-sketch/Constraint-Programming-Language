@@ -25,19 +25,15 @@ function Dfs(vars, cons, systems){
     */
    function rDfs(ind,rest){
       if(rest.length === 0) return check();
-      console.log(rest.length);
       let dom = resolve(rest.pop()?.domain)
       for(let x of dom) {
          assignment[ind] = x;
          if(rDfs(ind-1,[...rest])) return true;
       }
-      console.log("fail")
       return false;
    }
    let ret = rDfs(vars.length-1,[...vars])
-   console.log("ret"+ret);
    let ass = assignment
-   console.log("ass", ass);
    return ret ? ass.map((v,i) => ({key: vars[i].name,val: v})) : false;
 }
   
