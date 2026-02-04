@@ -1,0 +1,17 @@
+let X^5 := [m,s(a),n,k];
+let X2 := [m,h,n,s(d)];
+let X3 := [m,s(c),n,k];
+
+def system := {
+    parent(s(a),s(b)).
+    parent(s(a),s(c)).
+    parent(s(d),s(c)).
+    equal(X,X).
+    sibling(X,Y) <- 
+        parent(X,Z), 
+        ~equal(X,Y),
+        parent(Y,Z).
+};
+system[parent(X1,X3)];
+system[parent(X2,X3)];
+system[parent(X3,X4)];

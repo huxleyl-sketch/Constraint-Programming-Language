@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1" >
+    <title>test</title>
+    <style>
+        body { font-family: monospace; background-color: #f4f4f4; }
+        .console-container {
+            width: 80%;
+            margin: 20px auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #fff;
+        }
+        #console-output {
+            font-family: monospace;
+            height: 200px;
+            overflow-y: scroll;
+            border-bottom: 1px solid #ccc;
+            padding: 5px;
+            background-color: #f1f1f1;
+            color: rgb(33, 33, 33); /* Green text like a classic console */
+        }
+        #console-input {
+            font-family: monospace;
+            width: calc(100% - 12px);
+            padding: 5px;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+        #output {
+            font-family: monospace;
+            width: calc(100% - 12px);
+            padding: 5px;
+            border: 1px solid #ccc;
+            margin-top: 10px;
+        }
+    </style>
+ </head>
+ <body>
+    <label for="fileInput">Upload .csp file: </label>
+    <input 
+        type="file" 
+        id="fileInput"
+        accept=".csp"
+    />
+    <button id="save-button">Save Current File</button>
+    <pre id="output" contenteditable="true"></pre>
+
+    <div class="console-container">
+        <div id="console-output"></div>
+        <input type="text" id="console-input" placeholder="Enter code and press Enter...">
+    </div>
+
+    <script src="tokeniser.js"></script>
+    <script src="parser.js"></script>
+    <script src="predicateSolverExpr.js"></script>
+    <script src="constraintSystem.js"></script>
+    <script src="dfs.js"></script>
+    <script src="main.js"></script>
+    <script src="content.js"></script>
+</body>

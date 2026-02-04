@@ -1,0 +1,19 @@
+Comments: "%"
+Variables: "A-Z"
+Atoms: "a-Z"
+Not as Failure: "~"
+Conjunction: ","
+Implication: "<-"
+End of clause: "."
+
+
+Definitional equality: ":="
+Domain: "[" ARGS "]"
+Defining a predicate system: "def"
+Defining a new global variable: "let"
+predicate system: "{" PREDICATES "}"
+Adding a constraint / querying a predicate: SYSTEM NAME "[" PREDICATE "(" ARGS ")" "]"
+End of line: ";"
+
+
+
