@@ -42,9 +42,9 @@ class constraintSystem{
      * @param {{sys: string,pred: string}} rel 
      */
     addConstraint(scope, rel){
-        let vars = scope.map(e => resolve(this.variables.get(e)));
-        if(!this.searchConstraints({scope: vars, rel}))
-            this.constraints.push({scope: vars, rel});
+        let con = resolve(this.createConstraint(scope,rel))
+        if(!this.searchConstraints(con))
+            this.constraints.push(con);
     }
     /**
      * 
@@ -53,8 +53,17 @@ class constraintSystem{
      * @returns 
      */
     createConstraint(scope, rel){
-        let vars = scope.map(e => resolve(this.variables.get(e)));
-        return {scope: vars, rel};
+        let element = '';
+        try{
+
+            let vars = scope.map(e => {
+                element = e;
+                return resolve(this.variables.get(e))
+            });
+            return {scope: vars, rel};
+        }catch(e){
+            logToConsole(`${element} is not defined as a variable`);
+        }
     }
     /**
      * 

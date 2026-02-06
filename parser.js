@@ -35,7 +35,7 @@ function parser(code,system){
                 var predKey = resolve(pred.lhs?.[0]).match;
                 var vars = resolve(pred.rhs).filter(e => e.token.kind !== 'ANY').map(e => e.match);
                 let con = system.createConstraint(vars, {sys: sysKey, pred: predKey})
-                system.searchConstraints(con)
+                system.searchConstraints(resolve(con))
                 system.addConstraint(vars, {sys: sysKey, pred: predKey});
             break;
             default:
