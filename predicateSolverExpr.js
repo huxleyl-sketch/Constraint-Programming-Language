@@ -178,7 +178,7 @@ class definition{
             case 'ATOM|VAR': map.set(B,A); ret = true; break;
             case 'ATOM|PRED': ret = false; break;
             case 'VAR|ATOM': map.set(A,B); ret = true; break;
-            case 'VAR|VAR': map.set(A,B);map?.set(B,A); ret = true; break;
+            case 'VAR|VAR': map.set(A,B); ret = true; break;
             case 'VAR|PRED': map.set(A,B); ret = true; break;
             case 'PRED|ATOM': ret = false; break;
             case 'PRED|VAR': map.set(B,A); ret = true; break;
