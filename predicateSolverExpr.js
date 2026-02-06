@@ -165,9 +165,10 @@ class definition{
      * @param {Lookup<Expr>} map
      * @param {Expr} a
      * @param {Expr} b
+     * @param {boolean} [over = false]
      * @returns {boolean}
      */
-    unify(map,a,b){
+    unify(map,a,b,over = false){
         let ret = undefined;
         if (a.token.kind === 'ANY' || b.token.kind === 'ANY') ret = true;
         let A = resolve(map.grab(a),a);
@@ -184,11 +185,11 @@ class definition{
             case 'PRED|PRED':
                 const Alhs = resolve(A.lhs?.[0])
                 const Blhs = resolve(B.lhs?.[0])
-                if(!this.unify(map,Alhs,Blhs)) {ret = false; break;}
+                if(!this.unify(map,Alhs,Blhs,true)) {ret = false; break;}
                 const Arhss = resolve(A.rhs)
                 const Brhss = resolve(B.rhs)
                 if(Arhss.length !== Brhss.length) {ret = false; break;}
-                ret = Arhss.every((Arhs,i) => this.unify(map,Arhs,Brhss[i]));
+                ret = Arhss.every((Arhs,i) => this.unify(map,Arhs,Brhss[i],true));
                 break;
         }
         if(debug) {
