@@ -192,7 +192,7 @@ class definition{
                 ret = Arhss.every((Arhs,i) => this.unify(map,Arhs,Brhss[i],true));
                 break;
         }
-        if(debug) {
+        if(debug && !over) {
             let lA = A.lhs?.map(e => e.match).join(',') ?? A.match
             let rA = A.rhs ? `(${A.rhs.map(e => e.match).join(',')})` : ''
             let lB = B.lhs?.map(e => e.match).join(',') ?? B.match
