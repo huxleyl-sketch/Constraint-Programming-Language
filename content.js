@@ -34,12 +34,18 @@ inputElement.addEventListener('keydown', function(event) {
                 break;
             default:
                 logToConsole(command)
-                if(!conSystem.parseSystem(command)) 
-                    logToConsole('Unknown command:' + command)
+                try{
+                    if(!conSystem.parseSystem(command)) 
+                        logToConsole('Unknown command:' + command)
+                    break;
+                } catch(e){
+                    logToConsole(e)
+                }
         }
+        inputElement.value = ''; 
         
 
-        inputElement.value = ''; 
+        
     }
 });
 
