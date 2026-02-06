@@ -193,10 +193,10 @@ class definition{
                 break;
         }
         if(debug && !over) {
-            let lA = A.lhs?.map(e => e.match).join(',') ?? A.match
-            let rA = A.rhs ? `(${A.rhs.map(e => e.match).join(',')})` : ''
-            let lB = B.lhs?.map(e => e.match).join(',') ?? B.match
-            let rB = B.rhs ? `(${B.rhs.map(e => e.match).join(',')})` : ''
+            let lA = A.lhs ? printExpr(A.lhs) : A.match
+            let rA = A.rhs ? `(${printExpr(A.rhs)})` : ''
+            let lB = B.lhs ? printExpr(B.lhs) : B.match
+            let rB = B.rhs ? `(${printExpr(B.rhs)})` : ''
             logToConsole(`Unify: ${lA}${rA} - ${lB}${rB} - ${A.token.kind}|${B.token.kind}, ${ret}`)
         }
         if(typeof ret === 'boolean') return ret;

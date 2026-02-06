@@ -78,23 +78,9 @@ class constraintSystem{
             return false;
         }
     }
-    /**
-     * 
-     * @param {Expr | Expr[]} assignment 
-     * @returns {string}
-     */
-    formAssignment(assignment){
-        if(!Array.isArray(assignment)) assignment = [assignment];
-
-        return assignment.map(e => {
-            if(e.lhs == null && e.rhs == null) return e.match;
-            const lhs = e.lhs == null ? null : this.formAssignment(e.lhs);
-            const rhs = e.rhs == null ? null : this.formAssignment(e.rhs);
-            return `${lhs}(${rhs})`;
-        }).join(",");
-    }
+    
     returnAssignment(){
-        return this.findAssignment() ? this.findAssignment().map(e => `${e.key} => ${this.formAssignment(e.val)}`).join(`\n- `) : false
+        return this.findAssignment() ? this.findAssignment().map(e => `${e.key} => ${printExpr(e.val)}`).join(`\n- `) : false
     }
     /**
      * @returns {{key: string, val: Expr}[]}
@@ -103,3 +89,18 @@ class constraintSystem{
 }
 
 
+/**
+ * 
+ * @param {Expr | Expr[]} assignment 
+ * @returns {string}
+ */
+function printExpr(assignment){
+    if(!Array.isArray(assignment)) assignment = [assignment];
+
+    return assignment.map(e => {
+        if(e.lhs == null && e.rhs == null) return e.match;
+        const lhs = e.lhs == null ? null : printExpr(e.lhs);
+        const rhs = e.rhs == null ? null : printExpr(e.rhs);
+        return `${lhs}(${rhs})`;
+    }).join(",");
+}
