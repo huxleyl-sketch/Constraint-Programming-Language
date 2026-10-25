@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
+    "rootDir": ".",
+    "outDir": "dist",
+    "strict": true,
+    "sourceMap": true,
+    "noEmitOnError": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "*.ts",
+    "CSP Algorithms/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules"
+  ]
+}

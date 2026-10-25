@@ -1,0 +1,13 @@
+{
+  "name": "constraint-programming-language",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

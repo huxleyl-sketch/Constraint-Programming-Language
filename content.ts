@@ -1,11 +1,11 @@
 let FILENAME = '';
-let FILECONTENTS = () => document.getElementById("output").textContent;
+let FILECONTENTS = (): string => document.getElementById("output")!.textContent!;
 // Get references to the input and output elements
-const inputElement = document.getElementById('console-input');
-const outputElement = document.getElementById('console-output');
+const inputElement = (document.getElementById('console-input') as HTMLInputElement);
+const outputElement = document.getElementById('console-output')!;
 
 // Function to log messages to the custom output area
-function logToConsole(message) {
+function logToConsole(message: unknown) {
     const entry = document.createElement('div');
     entry.textContent = '- ' + message;
     entry.style.whiteSpace = 'pre-wrap';
@@ -18,71 +18,68 @@ function logToConsole(message) {
 inputElement.addEventListener('keydown', function(event) {
     if (event.key === 'Enter') {
         const command = inputElement.value;
-        
-        switch(command.toLowerCase()){
+
+        switch (command.toLowerCase()) {
             case 'clear':
                 outputElement.innerHTML = ''; // Clear output
-            break;
+                break;
             case 'debug':
                 debug = !debug;
-                logToConsole(`Changed debug mode to ${debug}`); 
-            break;
+                logToConsole(`Changed debug mode to ${debug}`);
+                break;
             case FILENAME:
-                logToConsole(`Reloaded ${FILENAME}`); 
+                logToConsole(`Reloaded ${FILENAME}`);
                 conSystem = new constraintSystem(Dfs);
-                parser(FILECONTENTS(),conSystem); 
+                parser(FILECONTENTS(), conSystem);
                 break;
             default:
                 logToConsole(command)
-                try{
-                    if(!conSystem.parseSystem(command)) 
+                try {
+                    if (!conSystem.parseSystem(command))
                         logToConsole('Unknown command:' + command)
                     break;
-                } catch(e){
+                } catch (e) {
                     logToConsole(e)
                 }
         }
-        inputElement.value = ''; 
-        
+        inputElement.value = '';
 
-        
     }
 });
 
-
-document.getElementById('fileInput').addEventListener('change', event => {
-    const file = event.target.files[0]; // Get the selected file
+document.getElementById('fileInput')!.addEventListener('change', event => {
+    const file = (event.target as HTMLInputElement).files?.[0]; // Get the selected file
     if (file) {
         const reader = new FileReader();
 
         reader.onload = function(e) {
-            const fileContents = e.target.result;
-            document.getElementById('output').textContent = fileContents; // Display the content 
+            const fileContents = e.target!.result as string;
+            document.getElementById('output')!.textContent = fileContents; // Display the content
             conSystem = new constraintSystem(Dfs)
             logToConsole(`Custom console for ${file.name} | 'clear' to clear | 'debug' to change debug mode | 'file name.csp' reloads the current file | Any other code can be added through the console`);
             logToConsole(`Initial Assignment:`)
             FILENAME = file.name;
-            parser(fileContents,conSystem); 
+            parser(fileContents, conSystem);
         };
 
         reader.onerror = function(e) {
-            console.error("Error reading file: ", e.target.error);
+            console.error("Error reading file: ", e.target!.error);
         };
         reader.readAsText(file); // Read the file as text
     }
 });
-function downloadFile(content, fileName, contentType) {
+function downloadFile(content: string, fileName: string, contentType: string) {
     const a = document.createElement("a");
     const file = new Blob([content], { type: contentType });
-    
+
     // Create a URL for the blob
     a.href = URL.createObjectURL(file);
     a.download = fileName; // Suggested filename
-    
+
     // Append to body, click, and remove
     document.body.appendChild(a);
     a.click();
-    
+
     // Clean up
     setTimeout(() => {
         document.body.removeChild(a);
@@ -90,8 +87,8 @@ function downloadFile(content, fileName, contentType) {
     }, 0);
 }
 
-document.getElementById('save-button').addEventListener('click', () => {
-  downloadFile(FILECONTENTS(),FILENAME,'');
+document.getElementById('save-button')!.addEventListener('click', () => {
+    downloadFile(FILECONTENTS(), FILENAME, '');
 });
 // Example usage:
 // downloadFile("Hello World", "test.txt", "text/plain");
