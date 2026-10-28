@@ -17,62 +17,55 @@
     return revised
  */
 
-function ArcConsistency(sys: constraintSystem): Assignment | false {
-  //First the constraints must be able to be reinterpreted as binary for this algorithm to work.
-  //For each constraint, ensure that the variables involved are consistent to depth 1 or "arc consistent"
+function ArcConsistency(sys: constraintSystem, vars?: Map<string,Expr> ): boolean {
+  //Enforce generalized arc consistency using supporting tuples from current domains.
 
   //for each variable in the scope of each constraint:
   //for each value in the domain of a variable:
   //
+  
   let cons = sys.constraints;
-  let vars = sys.variables;
   let predSys = sys.predSystems;
   let queue = [...cons];
-  while( queue.length > 0){
+  while( queue.length > 0 ){
     const con = resolve(queue.pop());
-    let addToQueue = false;
-    const checkExprs = Array.from(
-      { length: con.scope.length },
-      (_, i): Expr => new Expr(`X${i}`, 'VAR')
+    //find assignment to check
+    const domains = con.scope.map(v => v.domain);
+    //find values from domains
+    const cartesian = <T>(...domains: readonly (readonly T[])[]): T[][] =>
+        domains.reduce<T[][]>(
+            (tuples, domain): T[][] => tuples.flatMap(
+                (tuple): T[][] => domain.map((value): T[] => [...tuple, value])
+            ),
+            [[]]
+        );
+    const args = cartesian(...domains);
+    const system = resolve(predSys.get(con.rel.sys));
+    const validTuples = args.filter(
+      (assignment): boolean => !!system.parseCheck(con.rel.pred, assignment)
     );
-    con.scope.every((v,i) => {
-      let x_i = [...v.domain];
-      let curPredSys = predSys.get(con.rel.sys)
-      let testedVals = x_i.map(x => resolve(curPredSys).parseCheck(con.rel.pred,checkExprs.with(i,x)))
-      let newDomain = v.domain.filter((_,k) =>  {
-        let valsK = testedVals[k];
-        return !!valsK ? con.scope.every((v_j,j) => v_j.domain.some(d => objEqual(d,valsK[j]))) : false;
-      });
-      if(newDomain.length < v.domain.length) addToQueue = true;
-      v.domain = newDomain;
-      return v.domain.length > 0;
-    })
-    if (addToQueue) queue.push(con)
+    if (validTuples.length === 0) return false;
+
+    for (const [index, variable] of con.scope.entries()) {
+      const newDomain = variable.domain.filter(
+        (value): boolean => validTuples.some(
+          (tuple): boolean => objEqual(value, tuple[index])
+        )
+      );
+
+      if (newDomain.length < variable.domain.length) {
+        variable.domain = newDomain;
+        //Other constraints may lose support when this domain shrinks.
+        for (const affected of cons) {
+          if (affected !== con && affected.scope.includes(variable) && !queue.includes(affected)) {
+            queue.push(affected);
+          }
+        }
+      }
+      if (variable.domain.length === 0) return false;
+    }
     
   }
 
-  return false;
-
+  return [...sys.variables.values()].every((variable): boolean => variable.domain.length > 0);
 }
-/**
-    let assignment: Expr[] = [];
-
-    let check = (): boolean => cons.every((con) | undefined => {
-        let values = con.scope.map((v) => assignment[vars.indexOf(v)]);
-        return systems.get(con.rel.sys)?.parseCheck(con.rel.pred, values);
-    })
-
-    function rDfs(ind: number, rest: variable[]): boolean {
-        if (rest.length === 0) return check();
-        let dom = resolve(rest.pop()?.domain)
-        for (let x of dom) {
-            assignment[ind] = x;
-            if (rDfs(ind - 1, [...rest])) return true;
-        }
-        return false;
-    }
-    let ret = rDfs(vars.length - 1, [...vars])
-    let ass = assignment
-    return ret ? ass.map((v, i): { key: string; val: Expr; } => ({ key: vars[i].name, val: v })) : false;
-}
-    */

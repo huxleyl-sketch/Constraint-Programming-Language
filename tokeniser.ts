@@ -207,6 +207,45 @@ function interpreter(code: string): Array<Expr> {
     return fASTTree;
 }
 
-function objEqual(obj1: Object, obj2: Object): boolean {
-    return JSON.stringify(obj1) === JSON.stringify(obj2);
+/** Compare records, class instances and arrays by their own enumerable properties. */
+function objEqual(obj1: unknown, obj2: unknown): boolean {
+    const ancestors1 = new Map<object, object>();
+    const ancestors2 = new Map<object, object>();
+
+    function equal(a: unknown, b: unknown): boolean {
+        if (Object.is(a, b)) return true;
+        if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') {
+            return false;
+        }
+        if (Object.getPrototypeOf(a) !== Object.getPrototypeOf(b)) return false;
+        if (ancestors1.has(a) || ancestors2.has(b)) {
+            return ancestors1.get(a) === b && ancestors2.get(b) === a;
+        }
+
+        if (Array.isArray(a)) {
+            if (!Array.isArray(b) || a.length !== b.length) return false;
+        } else if (Object.prototype.toString.call(a) !== '[object Object]'
+            || Object.prototype.toString.call(b) !== '[object Object]') {
+            // Built-ins with internal state (such as Map and Date) require identity.
+            return false;
+        }
+
+        const keys = (value: object): PropertyKey[] => Reflect.ownKeys(value)
+            .filter(key => Object.prototype.propertyIsEnumerable.call(value, key));
+        const keysA = keys(a);
+        const keysB = keys(b);
+        if (keysA.length !== keysB.length) return false;
+
+        ancestors1.set(a, b);
+        ancestors2.set(b, a);
+        try {
+            return keysA.every(key => Object.prototype.propertyIsEnumerable.call(b, key)
+                && equal(Reflect.get(a, key), Reflect.get(b, key)));
+        } finally {
+            ancestors1.delete(a);
+            ancestors2.delete(b);
+        }
+    }
+
+    return equal(obj1, obj2);
 }

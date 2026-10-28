@@ -54,6 +54,22 @@ class predicateSystem {
         }
         return false;
     }
+    /**
+     * 
+     */
+    // parseDomainCheck(predKey: string | Expr, doms: Expr[][]): false | Expr[] {
+    //     //create an assignment for each
+    //     let queue = [...doms];
+    //     while(queue.length >0){
+    //         let curDom = queue.pop()
+    //         curDom?.filter(val => {
+    //             this.parseCheck(predKey,)
+    //         })
+    //     }
+        
+        
+    //     return false;
+    // }
 }
 class predicate {
     defs: definition[];
@@ -231,7 +247,7 @@ class Lookup<T extends object> {
         this.map = l.map;
     }
     /**
-     * Find A in keys, if found sets
+     * Find T in keys, if found sets
      */
     set(key: Expr | string, val: T) {
 
@@ -249,10 +265,6 @@ class Lookup<T extends object> {
         return this.map[sKey];
     }
 
-    /**
-     * Note: the original overloads promise T | undefined, but a missing expression key
-     * is returned unchanged as Expr. The overloads retain that existing limitation.
-     */
     grab(key: Expr | string): T | undefined;
     grab(key: Expr | T | string): T | undefined;
     grab(key: Expr | T | string): Expr | T | undefined {

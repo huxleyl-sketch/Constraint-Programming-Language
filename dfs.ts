@@ -1,10 +1,14 @@
-function Dfs(vars: variable[], cons: constraint[], systems: Map<string, predicateSystem>): Assignment | false {
+function Dfs(sys: constraintSystem): Assignment | false {
 
     let assignment: Expr[] = [];
 
+    let cons = sys.constraints;
+    let predSys = sys.predSystems;
+    let vars = [...sys.variables.values()]
+
     let check = (): boolean => cons.every((con): false | Expr[] | undefined => {
         let values = con.scope.map((v): Expr => assignment[vars.indexOf(v)]);
-        return systems.get(con.rel.sys)?.parseCheck(con.rel.pred, values);
+        return predSys.get(con.rel.sys)?.parseCheck(con.rel.pred, values);
     })
 
     function rDfs(ind: number, rest: variable[]): boolean {

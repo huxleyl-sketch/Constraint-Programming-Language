@@ -2,7 +2,7 @@ type variable = { name: string; domain: domain; };
 type domain = Array<Expr>;
 type constraint = { scope: variable[]; rel: { sys: string; pred: string; }; };
 type Assignment = { key: string; val: Expr }[];
-type Solver = (vars: variable[], cons: constraint[], systems: Map<string, predicateSystem>) => Assignment | false;
+type Solver = (conSys: constraintSystem) => Assignment | false;
 class constraintSystem {
     algorithm: Solver;
     variables: Map<string, variable>;
@@ -22,6 +22,7 @@ class constraintSystem {
 
     searchVariables = (variable: variable): boolean =>
         this.variables.has(variable.name);
+    
 
     searchConstraints = (con: constraint): boolean => this.constraints.map((c): string => JSON.stringify(c)).includes(JSON.stringify(con));
 
@@ -58,7 +59,7 @@ class constraintSystem {
         return (this.findAssignment() as Assignment | false) ? (this.findAssignment() as Assignment).map((e): string => `${e.key} => ${printExpr(e.val)}`).join(`\n- `) : false
     }
 
-    findAssignment(): Assignment | false { return this.algorithm([...this.variables.values()], this.constraints, this.predSystems); }
+    findAssignment(): Assignment | false { return this.algorithm(this); }
 }
 
 function printExpr(assignment: Expr | Expr[]): string {
