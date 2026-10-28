@@ -1,34 +1,34 @@
 function parser(code: string, system: constraintSystem) {
     let tree = interpreter(code);
     for (let eLine of tree) {
-        var line: Expr = eLine.kind !== 'LINE' ? resolve(eLine.lhs?.[0]) : eLine;
+        var line: Expr = eLine.kind === 'LINE' ? resolve(eLine.lhs?.[0]) : eLine;
         switch (line.kind) {
             case 'VARIABLE':
                 var def = resolve(line.rhs?.[0])
                 var lhs = resolve(def.lhs?.[0]);
-                var dom = resolve(def.rhs?.[0].rhs);
+                var dom = resolve(def.rhs?.[0]?.rhs);
                 var vars = lhs.kind === 'MANY' ?
                     Array.from({ length: Number(resolve(lhs.rhs?.[0]).match) + 1 }, (_, i): string => resolve(lhs.lhs?.[0]).match + i) :
                     [lhs.match];
                 for (let name of vars) {
-                    system.addVariable({ name, domain: dom })
+                    system.addVariable(name, dom)
                 }
                 break;
             case 'DEFINE':
                 var def = resolve(line.rhs?.[0])
                 var name = resolve(def.lhs?.[0]).match
-                var preds = resolve(def.rhs?.[0].rhs);
+                var preds = resolve(def.rhs?.[0]?.rhs);
                 var sys = new predicateSystem();
-                system.predSystems.set(name, parsePreds(preds, sys));
+                system.addPredicateSystem(name, parsePreds(preds, sys));
                 break;
             case 'QUERY':
                 var sysKey = resolve(line.lhs?.[0]).match
                 var pred = resolve(line.rhs?.[0]);
                 var predKey = resolve(pred.lhs?.[0]).match;
                 var vars = resolve(pred.rhs).filter((e): boolean => e.kind !== 'ANY').map((e): string => e.match);
-                let con = system.createConstraint(vars, { sys: sysKey, pred: predKey })
+                let con = system.createConstraint(vars, { system: sysKey, predicate: predKey })
                 system.searchConstraints(resolve(con))
-                system.addConstraint(vars, { sys: sysKey, pred: predKey });
+                system.addConstraint(vars, { system: sysKey, predicate: predKey });
                 break;
             default:
                 throw new Error(`No tokens of type VARIABLE, DEFINE, QUERY`)
@@ -39,7 +39,7 @@ function parser(code: string, system: constraintSystem) {
     logToConsole(system.returnAssignment());
 }
 
-function parsePreds(tree: Expr[], system: predicateSystem): predicateSystem {
+function parsePreds(tree: readonly Expr[], system: predicateSystem): predicateSystem {
 
     for (let clause of tree) {
         if (clause.kind !== 'CLAUSE') throw new Error(`Expected token CLAUSE, got ${clause.kind} instead`);

@@ -1,4 +1,6 @@
-type Dep = { pred: Expr; args: Expr[]; not: boolean };
+let nextClauseScope = 0;
+
+type Dep = { pred: Expr; args: readonly Expr[]; not: boolean };
 type Deps = Dep[];
 
 class predicateSystem {
@@ -8,7 +10,7 @@ class predicateSystem {
         this.preds = new Lookup();
     }
 
-    addPredicate(name: Expr, args: Expr[], deps: Deps = []) {
+    addPredicate(name: Expr, args: readonly Expr[], deps: Deps = []) {
         //only add predicate if it is not in preds
         if (!this.preds.has(name))
             this.preds.set(name, new predicate(name.match, this))
@@ -30,21 +32,22 @@ class predicateSystem {
     /**
      * Can handle pure string input, then uses parseCheck.
      */
-    parseQuery(Input: Expr[] | string): false | Expr[] {
+    parseQuery(Input: readonly Expr[] | string): false | Expr[] {
         //convert input to tokens
         let Inp = typeof Input === 'string' ? interpreter(Input) : Input;
-        if (Inp[0].kind !== 'PRED') throw new Error(`Input isn't predicate, got ${Inp[0].kind} instead`);
+        const root = resolve(Inp[0], "predicate query root");
+        if (root.kind !== 'PRED') throw new Error(`Input isn't predicate, got ${root.kind} instead`);
         //find predicate key
-        let predKey = resolve(Inp[0].lhs?.[0])
+        let predKey = resolve(root.lhs?.[0])
         //find raw args
-        let args = resolve(Inp[0].rhs);
+        let args = resolve(root.rhs);
         
         return this.parseCheck(predKey,args)
     }
     /**
      * Cannot handle pure string input, use parseQuery for in code queries.
      */
-    parseCheck(predKey: string | Expr, args: Expr[]): false | Expr[] {
+    parseCheck(predKey: string | Expr, args: readonly Expr[]): false | Expr[] {
         //find predicate
         let pred = this.grabPred(predKey);
         //return result of predicate query
@@ -85,13 +88,13 @@ class predicate {
     /**
      * Adds definitions to Defs.
      */
-    addDefinition(args: Expr[], system: predicateSystem, deps: Deps) {
+    addDefinition(args: readonly Expr[], system: predicateSystem, deps: Deps) {
         this.defs.push(new definition(args, deps, system));
     }
     /**
      * Tests Args against each Definition of the Definitions.
      */
-    *query(Inputs: Expr[] | string): Generator<false | Expr[], void, unknown> {
+    *query(Inputs: readonly Expr[] | string): Generator<false | Expr[], void, unknown> {
         let Inps = typeof Inputs === 'string' ? resolve(interpreter(Inputs), Inputs) : Inputs
 
         for (let def of this.defs) {
@@ -107,11 +110,11 @@ class predicate {
     }
 }
 class definition {
-    args: Expr[];
+    args: readonly Expr[];
     deps: Deps;
     system: predicateSystem;
 
-    constructor(args: Expr[], deps: Deps, system: predicateSystem) {
+    constructor(args: readonly Expr[], deps: Deps, system: predicateSystem) {
         this.args = args; //Arguements.
         this.deps = deps; //Dependencies.
         this.system = system
@@ -122,41 +125,67 @@ class definition {
      * Evaluates the definition from the Inputs.
 
      */
-    test(Inps: Expr[]): false | Expr[] {
+    test(Inps: readonly Expr[]): false | Expr[] {
         let vars: Lookup<Expr> = new Lookup()
 
         //both arguments are the same length. (Heuristic)
         if (Inps.length != this.args.length) { return false }
 
-        //every argument evaluates with each input, and variables are updated accordingly.
-        if (!this.args.every((arg, i): boolean => this.unify(vars, arg, Inps[i]))) { return false }
+        // Standardize apart: head and body share fresh identities for this invocation only.
+        const scope = ++nextClauseScope;
+        const fresh = (expr: Expr): Expr => new Expr(
+            expr.match,
+            expr.kind,
+            expr.lhs === null ? null : expr.lhs.map(fresh),
+            expr.rhs === null ? null : expr.rhs.map(fresh),
+            expr.kind === 'VAR' ? `\0clause:${scope}:${expr.match}` : undefined
+        );
+        const args = this.args.map(fresh);
+        const deps = this.deps.map((dep): Dep => ({
+            pred: fresh(dep.pred), args: dep.args.map(fresh), not: dep.not
+        }));
 
-        let v = this.assign(this.deps, vars)
+        //every argument evaluates with each input, and variables are updated accordingly.
+        if (!args.every((arg, i): boolean => this.unify(vars, arg, resolve(Inps[i])))) { return false }
+
+        let v = this.assign(deps, vars)
 
         if (!v) return false;
 
         //finds all updated values of args and returns them
-        return this.mapExprTree(this.args, v);
+        return this.mapExprTree(Inps, v);
     }
     /**
      * Map an Expr tree by replacing VAR/ATOM nodes via a lookup.
      */
-    mapExprTree(node: Expr | Expr[], lookup: Lookup<Expr>): Expr[] {
-        if (Array.isArray(node)) return node.flatMap((n): Expr[] => this.mapExprTree(n, lookup));
-        const mapped = lookup.grab(node) ?? node;
+    mapExprTree(node: Expr | readonly Expr[], lookup: Lookup<Expr>): Expr[] {
+        if (!("kind" in node)) return node.flatMap((n): Expr[] => this.mapExprTree(n, lookup));
+        const mapped = node.kind === 'VAR' ? lookup.grab(node) ?? node : node;
         if (mapped.lhs == null && mapped.rhs == null) return [mapped];
         const lhs = mapped.lhs == null ? null : (this.mapExprTree(mapped.lhs, lookup));
         const rhs = mapped.rhs == null ? null : (this.mapExprTree(mapped.rhs, lookup));
-        return [new Expr(mapped.match, mapped.kind, lhs, rhs)];
+        return [new Expr(mapped.match, mapped.kind, lhs, rhs, mapped.variableId)];
     }
     /**
      * Unify a and b and update the mapping accordingly
      */
     unify(map: Lookup<Expr>, a: Expr, b: Expr, over: boolean = false): boolean {
         let ret = undefined;
-        if (a.kind === 'ANY' || b.kind === 'ANY') ret = true;
-        let A = resolve(map.grab(a), a);
-        let B = resolve(map.grab(b), b);
+        if (a.kind === 'ANY' || b.kind === 'ANY') return true;
+        const A = a.kind === 'VAR' ? resolve(map.grab(a), a) : a;
+        const B = b.kind === 'VAR' ? resolve(map.grab(b), b) : b;
+        if (A.kind === 'VAR' && B.kind === 'VAR' && A.variableId === B.variableId) return true;
+
+        // A finite expression cannot contain itself through a binding.
+        function occurs(variable: Expr, value: Expr): boolean {
+            const term = value.kind === 'VAR' ? resolve(map.grab(value)) : value;
+            if (term.kind === 'VAR') return term.variableId === variable.variableId;
+            return [...term.lhs ?? [], ...term.rhs ?? []].some(
+                (child): boolean => occurs(variable, child)
+            );
+        }
+        if (A.kind === 'VAR' && occurs(A, B)) return false;
+        if (B.kind === 'VAR' && occurs(B, A)) return false;
         switch (`${A.kind}|${B.kind}`) {
             case 'ATOM|ATOM': ret = A.match === B.match; break;
             case 'ATOM|VAR': map.set(B, A); ret = true; break;
@@ -173,7 +202,7 @@ class definition {
                 const Arhss = resolve(A.rhs)
                 const Brhss = resolve(B.rhs)
                 if (Arhss.length !== Brhss.length) { ret = false; break; }
-                ret = Arhss.every((Arhs, i): boolean => this.unify(map, Arhs, Brhss[i], true));
+                ret = Arhss.every((Arhs, i): boolean => this.unify(map, Arhs, resolve(Brhss[i]), true));
                 break;
         }
         if (debug && !over) {
@@ -194,7 +223,7 @@ class definition {
         //escape condition, no more dependencies, return assignment
         if (Arr.length == 0) { return Assignment; }
         //find information about current dependency
-        let [dep] = Arr;
+        const dep = resolve(Arr[0]);
         let arr = Arr.slice(1);
         let pred = resolve(this.system.preds.grab(dep.pred), dep.pred);
         let not = dep.not ?? false;
@@ -224,7 +253,7 @@ class definition {
             //copy assignment
             let ass = new Lookup(Assignment);
             //apply current bindings
-            if (!t.every((val, i): boolean => this.unify(ass, args[i], val))) continue;
+            if (!t.every((val, i): boolean => this.unify(ass, resolve(args[i]), val))) continue;
             //test current bindings
             let back = this.assign(arr, ass);
             //if there are no other solutions continue
@@ -251,7 +280,7 @@ class Lookup<T extends object> {
      */
     set(key: Expr | string, val: T) {
 
-        let sKey = typeof key === 'string' ? key : key.match;
+        let sKey = typeof key === 'string' ? key : key.kind === 'VAR' ? `var:${key.variableId}` : key.match;
 
         this.map[sKey] = val;
     }
@@ -260,7 +289,7 @@ class Lookup<T extends object> {
      * returns undefined if key does not appear in Lookup
      */
     get(key: Expr | string): T | undefined {
-        let sKey = typeof key === 'string' ? key : key.match;
+        let sKey = typeof key === 'string' ? key : key.kind === 'VAR' ? `var:${key.variableId}` : key.match;
         //return val
         return this.map[sKey];
     }
@@ -270,7 +299,7 @@ class Lookup<T extends object> {
     grab(key: Expr | T | string): Expr | T | undefined {
 
         if (!(typeof key === 'string' || 'match' in key)) return key;
-        let sKey = typeof key === 'string' ? key : (key as Expr).match;
+        let sKey = typeof key === 'string' ? key : (key as Expr).kind === 'VAR' ? `var:${(key as Expr).variableId}` : (key as Expr).match;
 
         let val = this.get(sKey)
         if (!val) return typeof key === 'string' ? undefined : key;
@@ -279,7 +308,7 @@ class Lookup<T extends object> {
     }
 
     has(key: Expr | string): boolean {
-        let sKey = typeof key === 'string' ? key : key.match;
+        let sKey = typeof key === 'string' ? key : key.kind === 'VAR' ? `var:${key.variableId}` : key.match;
         return !!this.map[sKey]
     }
 }

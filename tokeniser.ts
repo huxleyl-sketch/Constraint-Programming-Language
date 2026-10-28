@@ -52,21 +52,26 @@ type TokenKind = typeof Tokens[number]["kind"];
 //need to flip yfx and yf
 
 class Expr {
-    match: string;
-    kind: TokenKind;
-    lhs: Expr[] | null;
-    rhs: Expr[] | null;
+    readonly match: string;
+    readonly kind: TokenKind;
+    /** Binding identity; spelling alone is only shared within an uninstantiated query. */
+    readonly variableId: string | undefined;
+    readonly lhs: readonly Expr[] | null;
+    readonly rhs: readonly Expr[] | null;
 
     constructor(
         match: string,
         token: tokenTemp | TokenKind,
-        lhs: Array<Expr> | null = null,
-        rhs: Array<Expr> | null = null
+        lhs: readonly Expr[] | null = null,
+        rhs: readonly Expr[] | null = null,
+        variableId?: string
     ) {
         this.match = match;
         this.kind = typeof token === 'string' ? token : token.kind;
-        this.lhs = lhs;
-        this.rhs = rhs;
+        this.variableId = this.kind === 'VAR' ? variableId ?? match : undefined;
+        this.lhs = lhs === null ? null : Object.freeze([...lhs]);
+        this.rhs = rhs === null ? null : Object.freeze([...rhs]);
+        Object.freeze(this);
     }
 }
 
@@ -131,7 +136,7 @@ function interpreter(code: string): Array<Expr> {
     function ASTBuild(tokens: token[]): Expr[] {
         let Exprs: Expr[] = []
         for (let i = 0; i < tokens.length; i++) {
-            let head = tokens[i]
+            let head = resolve(tokens[i])
             let tail = tokens.slice(i + 1);
             let lhs: Expr[] | null = null;
             let rhs: Expr[] | null = null;
@@ -170,7 +175,7 @@ function interpreter(code: string): Array<Expr> {
                     var depth = 0;
                     var closeIndex = -1;
                     for (let j = 0; j < tail.length; j++) {
-                        const t = tail[j];
+                        const t = resolve(tail[j]);
                         if (/o/g.test(t.type)) depth++;
                         if (/c/g.test(t.type)) {
                             if (depth === 0) { closeIndex = j; break; }
@@ -191,7 +196,7 @@ function interpreter(code: string): Array<Expr> {
         return Exprs;
     }
 
-    function removeComma(ASTTree: Expr[]): Expr[] {
+    function removeComma(ASTTree: readonly Expr[]): Expr[] {
         return ASTTree.filter((e): boolean => e.kind !== 'COMMA').map((e): Expr => {
             if (e.lhs == null && e.rhs == null) return e;
             const lhs = e.lhs == null ? null : (removeComma(e.lhs));

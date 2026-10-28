@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "test": "npm run build && node tests/solver-state.cjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3"
