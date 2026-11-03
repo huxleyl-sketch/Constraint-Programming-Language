@@ -2,11 +2,11 @@
 
 `constraintSystem` builds the problem and owns the initial domains. Use `addVariable`, `addConstraint`, and `addPredicateSystem` to edit the definition. Constraint scopes contain variable names, not variable objects.
 
-Solvers implement `(problem: Problem, domains: Domains) => Assignment | false`. `Problem` exposes only readonly constraints and `check(constraint, values)`. Predicate lookup stays inside `constraintSystem`. Domain-map keys identify variables; there is no separate variable registry. Initial domain arrays, constraints, expression objects, and expression children are frozen. Predicate definitions should remain unchanged during a synchronous solve.
+Solvers implement `(problem: Problem, domains: Domains) => Solutions`. `Problem` exposes only readonly constraints and `check(constraint, values)`. Predicate lookup stays inside `constraintSystem`. Domain-map keys identify variables; there is no separate variable registry. Initial domain arrays, constraints, expression objects, and expression children are frozen. Predicate definitions should remain unchanged during a synchronous solve.
 
 `Domains` is a readonly map of readonly expression arrays. Create a branch with `new Map(domains)` and replace entries; never mutate stored arrays. Expressions can be shared because they are immutable.
 
-`ArcConsistency(problem, domains)` returns a new pruned map or `false`, without editing its inputs. `MAC` uses a fresh map for each choice. `Dfs` uses its own assignment map. Neither solver alters initial domains. The browser still selects DFS; use `new constraintSystem(MAC)` to select MAC.
+`ArcConsistency(problem, domains)` returns a new pruned map or `false`, without editing its inputs. `MAC` uses a fresh map for each choice. `Dfs` uses its own assignment map. Both solvers lazily yield frozen assignments and explore remaining branches when resumed. Neither solver alters initial domains. Both consoles require a choice of DFS or MAC before loading or solving.
 
 Readonly maps are compile-time views, not runtime-frozen collections. Do not bypass them with casts or `any`. The builder returns copies so modifying an escaped map cannot edit its internal registry. The problem interface hides predicate systems, though code holding a separate predicate-system reference can still modify it; do not edit definitions during a solve.
 
@@ -19,3 +19,11 @@ Builder API: `addVariable(name, values)` and `addConstraint(scope, { system, pre
 Each clause invocation standardizes its variables apart using fresh internal `Expr.variableId` values. Its head and body share identities for the same local variable; callers and other invocations do not. `match` remains the original display spelling. Bindings are keyed by variable identity, not spelling. Returned answers describe the caller's arguments, preserving shared variable identities. Answers with equal spellings can still denote distinct variables: compare `variableId` when testing variable identity.
 
 Unification avoids self-bindings and rejects bindings that would make an expression contain itself (the occurs check). Recursive predicates remain supported, but nonterminating user predicates are not automatically bounded.
+
+## Solution navigation
+
+`constraintSystem.solutions()` returns a forward-only `Solutions` generator. `findAssignment()` retains its old first-assignment-or-false contract and closes the iterator afterward. Problem changes invalidate outstanding iterators before the next search step.
+
+`SolutionSession` owns one iterator and implements `solve`, `next`, and `stop` for both consoles. It stores no previous assignments. Restarting, stopping, exhausting the iterator, or encountering an error closes it. Console edits and successful reloads discard the active session; editing the browser file text also stops navigation (reload to apply those text edits).
+
+Browser users can type the commands or use Solve / Next solution / Stop. Terminal users use the same commands. `next` advances CSP assignments; `;` still advances predicate-query answers. Parsing and loading never run the solver; enter `solve` to begin numbered navigation from the first solution.

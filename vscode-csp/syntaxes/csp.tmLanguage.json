@@ -1,0 +1,91 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Constraint Programming Language",
+  "scopeName": "source.csp",
+  "patterns": [
+    {
+      "name": "meta.import.path.csp",
+      "match": "\\b(from)\\s*(\\([^()\\r\\n]*\\))",
+      "captures": {
+        "1": {
+          "name": "keyword.declaration.csp"
+        },
+        "2": {
+          "name": "string.unquoted.import-path.csp"
+        }
+      }
+    },
+    {
+      "name": "comment.line.percentage.csp",
+      "match": "%.*$"
+    },
+    {
+      "name": "keyword.other.syntax.csp",
+      "match": "\\bsyntax(?=\\s*\\[)|\\b(?:extends|opp|yfx|xfy|xfx)\\b"
+    },
+    {
+      "name": "keyword.declaration.csp",
+      "match": "\\b(?:let|def|import|from)\\b"
+    },
+    {
+      "name": "keyword.operator.csp",
+      "match": ":=|\\^|\\||:|<-|~|[=<>!+*\\/&?\\-]+"
+    },
+    {
+      "name": "variable.language.anonymous.csp",
+      "match": "(?<!\\w)_(?!\\w)"
+    },
+    {
+      "name": "variable.other.csp",
+      "match": "\\b[A-Z]\\w*\\b"
+    },
+    {
+      "name": "entity.name.function.csp",
+      "match": "\\b[a-z0-9]\\w*(?=\\s*\\()"
+    },
+    {
+      "name": "entity.name.type.csp",
+      "match": "\\b[a-z0-9]\\w*(?=\\s*(?:\\[|:)|\\s+from\\b)"
+    },
+    {
+      "name": "string.unquoted.atom.csp",
+      "match": "\\b[a-z0-9]\\w*\\b"
+    },
+    {
+      "name": "punctuation.section.braces.begin.csp",
+      "match": "\\{"
+    },
+    {
+      "name": "punctuation.section.braces.end.csp",
+      "match": "\\}"
+    },
+    {
+      "name": "punctuation.section.brackets.begin.csp",
+      "match": "\\["
+    },
+    {
+      "name": "punctuation.section.brackets.end.csp",
+      "match": "\\]"
+    },
+    {
+      "name": "punctuation.section.parens.begin.csp",
+      "match": "\\("
+    },
+    {
+      "name": "punctuation.section.parens.end.csp",
+      "match": "\\)"
+    },
+    {
+      "name": "punctuation.separator.comma.csp",
+      "match": ","
+    },
+    {
+      "name": "punctuation.terminator.clause.csp",
+      "match": "\\."
+    },
+    {
+      "name": "punctuation.terminator.statement.csp",
+      "match": ";"
+    }
+  ]
+}

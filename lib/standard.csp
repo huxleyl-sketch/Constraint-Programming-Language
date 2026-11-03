@@ -1,0 +1,123 @@
+% Reusable decimal arithmetic and finite-list relationships.
+% Decimal: 123 = n(1,n(2,3)); list: cons(a,cons(b,nil)).
+def standard := {
+  syntax[
+    opp xfx =/2. 
+    opp yfx +/3.
+    opp 500 yfx */3.
+    opp yfx -/3.
+    opp xfx </2.
+    opp xfx <=/2.
+    opp xfx >/2.
+    opp xfx >=/2.
+    opp xfx numberEqual/2.
+    opp xfx different/2.
+    opp xfx allDiff/2.
+  ].
+  equal(X,X).
+  =(X,X).
+  different(A,B) <- ~equal(A,B).
+
+  % Ground finite lists; different/allDiff test values, not delayed inequalities.
+  member(X,cons(X,_)).
+  member(X,cons(_,T)) <- member(X,T).
+  append(nil,B,B).
+  append(cons(H,T),B,cons(H,R)) <- append(T,B,R).
+  reverse(L,R) <- reverseInto(L,nil,R).
+  reverseInto(nil,A,A).
+  reverseInto(cons(H,T),A,R) <- reverseInto(T,cons(H,A),R).
+  notMember(X,L) <- ~member(X,L).
+  allDiff(nil).
+  allDiff(cons(H,T)) <- notMember(H,T), allDiff(T).
+  allDiff(A,B) <- different(A,B).
+  allDiff(A,B,C) <- allDiff(cons(A,cons(B,cons(C,nil)))).
+  allDiff(A,B,C,D) <- allDiff(cons(A,cons(B,cons(C,cons(D,nil))))).
+
+  % Digit successor with overflow, internal to arithmetic.
+  fastStep(0,1,0). fastStep(1,2,0). fastStep(2,3,0).
+  fastStep(3,4,0). fastStep(4,5,0). fastStep(5,6,0).
+  fastStep(6,7,0). fastStep(7,8,0). fastStep(8,9,0).
+  fastStep(9,0,1).
+
+  % Fast arithmetic: ground decimal inputs, result as the third argument.
+  % n(1,n(2,3)) represents 123. Internal ds lists store units first.
+  fastDigit(0). fastDigit(1). fastDigit(2). fastDigit(3). fastDigit(4).
+  fastDigit(5). fastDigit(6). fastDigit(7). fastDigit(8). fastDigit(9).
+  fastDigits(D,L,ds(D,L)) <- fastDigit(D).
+  fastDigits(n(H,T),L,R) <- fastDigit(H), fastDigits(T,ds(H,L),R).
+
+  % Add at most nine units to one digit, tracking overflow separately.
+  fastCarry(0,0,0). fastCarry(0,1,1). fastCarry(1,0,1).
+  fastDigitSum(0,B,B,0) <- fastDigit(B).
+  fastDigitSum(A,B,S,C) <- fastStep(P,A,0), fastDigit(P),
+    fastDigitSum(P,B,T,C0), fastStep(T,S,C1), fastCarry(C0,C1,C).
+  fastDigitSumC(A,B,C,S,Out) <- fastDigitSum(A,B,T,C0),
+    fastDigitSum(C,T,S,C1), fastCarry(C0,C1,Out).
+
+  fastSum(nil,nil,0,nil).
+  fastSum(nil,nil,1,ds(1,nil)).
+  fastSum(ds(A,As),nil,C,ds(S,Ss)) <-
+    fastDigitSumC(A,0,C,S,C1), fastSum(As,nil,C1,Ss).
+  fastSum(nil,ds(B,Bs),C,ds(S,Ss)) <-
+    fastDigitSumC(0,B,C,S,C1), fastSum(nil,Bs,C1,Ss).
+  fastSum(ds(A,As),ds(B,Bs),C,ds(S,Ss)) <-
+    fastDigitSumC(A,B,C,S,C1), fastSum(As,Bs,C1,Ss).
+
+  % Reverse the result and discard leading zeroes when rebuilding decimals.
+  fastReverse(nil,A,A).
+  fastReverse(ds(D,T),A,R) <- fastReverse(T,ds(D,A),R).
+  fastNonzero(1). fastNonzero(2). fastNonzero(3). fastNonzero(4).
+  fastNonzero(5). fastNonzero(6). fastNonzero(7). fastNonzero(8). fastNonzero(9).
+  fastNumber(nil,0).
+  fastNumber(ds(0,T),N) <- fastNumber(T,N).
+  fastNumber(ds(D,T),N) <- fastNonzero(D), fastNumberTail(D,T,N).
+  fastNumberTail(D,nil,D).
+  fastNumberTail(D,ds(E,T),n(D,N)) <- fastNumberTail(E,T,N).
+  fastResult(L,N) <- fastReverse(L,nil,R), fastNumber(R,N).
+
+  fastAdd(A,B,N) <- fastDigits(A,nil,As), fastDigits(B,nil,Bs),
+    fastSum(As,Bs,0,S), fastResult(S,N).
+
+  % A digit product uses at most nine additions, independent of operand value.
+  fastTimesDigit(0,_,nil).
+  fastTimesDigit(D,B,R) <- fastStep(P,D,0), fastDigit(P),
+    fastTimesDigit(P,B,T), fastSum(B,T,0,R).
+  fastProduct(nil,_,nil).
+  fastProduct(ds(D,T),B,R) <- fastProduct(T,B,P),
+    fastTimesDigit(D,B,Q), fastSum(Q,ds(0,P),0,R).
+  fastMult(A,B,N) <- fastDigits(A,nil,As), fastDigits(B,nil,Bs),
+    fastProduct(As,Bs,P), fastResult(P,N).
+
+  % Nonnegative subtraction. Final borrow must be zero, so A < B fails.
+  fastDigitSub(A,B,C,D,Out) <- fastDigit(D), fastDigitSumC(B,D,C,A,Out).
+  fastDifference(nil,nil,0,nil).
+  fastDifference(ds(A,As),nil,C,ds(D,T)) <-
+    fastDigitSub(A,0,C,D,C1), fastDifference(As,nil,C1,T).
+  fastDifference(nil,ds(B,Bs),C,ds(D,T)) <-
+    fastDigitSub(0,B,C,D,C1), fastDifference(nil,Bs,C1,T).
+  fastDifference(ds(A,As),ds(B,Bs),C,ds(D,T)) <-
+    fastDigitSub(A,B,C,D,C1), fastDifference(As,Bs,C1,T).
+  fastSub(A,B,N) <- fastDigits(A,nil,As), fastDigits(B,nil,Bs),
+    fastDifference(As,Bs,0,D), fastResult(D,N).
+
+  % Arithmetic aliases and comparisons require ground decimal operands.
+  +(A,B,N) <- fastAdd(A,B,N).
+  *(A,B,N) <- fastMult(A,B,N).
+  -(A,B,N) <- fastSub(A,B,N).
+  successor(A,B) <- fastAdd(A,1,B).
+  <=(A,B) <- fastSub(B,A,_).
+  <(A,B) <- fastSub(B,A,D), different(D,0).
+  >(A,B) <- <(B,A).
+  >=(A,B) <- <=(B,A).
+  numberEqual(A,B) <- fastSub(A,B,0).
+  minimum(A,B,A) <- <=(A,B).
+  minimum(A,B,B) <- <(B,A).
+  maximum(A,B,B) <- <=(A,B).
+  maximum(A,B,A) <- <(B,A).
+  sum(nil,0).
+  sum(cons(H,T),N) <- sum(T,S), fastAdd(H,S,N).
+  product(nil,1).
+  product(cons(H,T),N) <- product(T,P), fastMult(H,P,N).
+  length(nil,0).
+  length(cons(_,T),N) <- length(T,L), successor(L,N).
+};

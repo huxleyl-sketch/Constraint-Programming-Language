@@ -1,0 +1,28 @@
+
+def standardLegacy := {
+  equal(X,X).
+
+  add1c(0,1,0).
+  add1c(1,2,0).
+  add1c(2,3,0).
+  add1c(3,4,0).
+  add1c(4,5,0).
+  add1c(5,6,0).
+  add1c(6,7,0).
+  add1c(7,8,0).
+  add1c(8,9,0).
+  
+  add1(A,X) <- add1c(A,X,C), equal(C,0).
+  add1(A,n(C,Z)) <- add1c(A,Z,C), equal(C,1).
+
+  add01c(0,X,X,0).
+  add01c(1,9,0,1).
+  add01c(1,X,X1,C) <- add1c(X,X1,C).
+  add1c(9,0,1).
+  add1c(n(H,T),n(H1,T1),CH) <- add1c(T,T1,CT), add01c(CT,H,H1,CH).
+  
+  add(0,X,X).
+  add(A,B,N) <- add1(A1,A), add1(B,B1), add(A1,B1,N).
+  mult(0,_,0).
+  mult(A,B,N) <- add1(A1,A), mult(A1,B,N1) add(B,N1,N).
+};

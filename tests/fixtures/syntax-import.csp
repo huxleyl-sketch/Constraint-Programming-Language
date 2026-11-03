@@ -1,0 +1,8 @@
+import arithmetic from (../../examples/syntax-example.csp);
+
+let A := [2,3];
+let B := [4];
+let C := [5];
+let Result := [n(2,2),n(2,3)];
+arithmetic[Result = A add B mult C];
+arithmetic[A less B];

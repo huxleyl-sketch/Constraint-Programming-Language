@@ -1,0 +1,84 @@
+{
+  "Child predicate system": {
+    "prefix": "extends",
+    "body": [
+      "def ${1:arithmetic} extends ${2:standard} := {",
+      "\t$0",
+      "};"
+    ],
+    "description": "Inherit predicates and syntax from a parent system"
+  },
+  "Syntax declaration": {
+    "prefix": "syntax",
+    "body": [
+      "syntax[",
+      "\topp ${1|yfx,xfy,xfx|} ${2:add}/${3|3,2|}.",
+      "]."
+    ],
+    "description": "Declare exported infix syntax inside a predicate system"
+  },
+  "Result operation": {
+    "prefix": "operation",
+    "body": "${1:C} = ${2:A} ${3:add} ${4:B}",
+    "description": "Relate a result to a declared /3 operation using equality"
+  },
+  "Import system": {
+    "prefix": "import",
+    "body": "import ${1:test} from (${2:./other.csp});",
+    "description": "Import a named predicate system"
+  },
+  "Variable domain": {
+    "prefix": "let",
+    "body": "let ${1:X} := [${2:a,b,c}];",
+    "description": "Declare a variable and its domain"
+  },
+  "Variable family": {
+    "prefix": "many",
+    "body": "let ${1:X}^${2:5} := [${3:a,b,c}];",
+    "description": "Declare variables numbered from zero through the given index"
+  },
+  "Predicate system": {
+    "prefix": "def",
+    "body": [
+      "def ${1:system} := {",
+      "\t$0",
+      "};"
+    ],
+    "description": "Define a predicate system"
+  },
+  "Fact": {
+    "prefix": "fact",
+    "body": "${1:parent}(${2:a},${3:b}).",
+    "description": "Add a fact"
+  },
+  "Symbolic predicate": {
+    "prefix": "operator",
+    "body": "${1:=}(${2:X},${3:X}).",
+    "description": "Define a symbolic predicate; infix calls require a syntax declaration"
+  },
+  "Qualified predicate": {
+    "prefix": "call",
+    "body": "${1:test}:${2:greater}(${3:X},${4:Y})",
+    "description": "Call a predicate in another system from a rule body"
+  },
+  "Rule": {
+    "prefix": "rule",
+    "body": [
+      "${1:sibling}(X,Y) <-",
+      "\t${2:parent}(X,Z),",
+      "\t~${3:equal}(X,Y),",
+      "\t${2:parent}(Y,Z)."
+    ],
+    "description": "Add a rule with dependencies"
+  },
+  "Query": {
+    "prefix": "query",
+    "body": "${1:system}[${2:parent}(${3:X1},${4:X2})];",
+    "description": "Add a constraint using a predicate system"
+  },
+  "Bracket query": {
+    "prefix": "querybracket",
+    "body": "${1:system}[${2:parent}(${3:X1},${4:X2})];",
+    "description": "Add a constraint using bracket syntax"
+  }
+}

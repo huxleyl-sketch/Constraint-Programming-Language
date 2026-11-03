@@ -17,8 +17,7 @@
     "noPropertyAccessFromIndexSignature": true
   },
   "include": [
-    "*.ts",
-    "CSP Algorithms/**/*.ts"
+    "src/**/*.ts"
   ],
   "exclude": [
     "dist",

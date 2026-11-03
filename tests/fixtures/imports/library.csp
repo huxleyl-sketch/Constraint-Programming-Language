@@ -1,0 +1,6 @@
+import helper from (./nested/helper.csp);
+def test := {
+    value(X) <- helper:value(X).
+};
+let Ignored := [wrong];
+missing[shouldNotRun(Ignored)];

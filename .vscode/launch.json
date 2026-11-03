@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Preview CSP syntax highlighting",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/vscode-csp",
+        "${workspaceFolder}/examples/example.csp"
+      ]
+    }
+  ]
+}

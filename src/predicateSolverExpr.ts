@@ -1,11 +1,13 @@
 let nextClauseScope = 0;
 
-type Dep = { pred: Expr; args: readonly Expr[]; not: boolean };
+type Dep = { pred: Expr; args: readonly Expr[]; not: boolean; systemName?: string };
 type Deps = Dep[];
 
 class predicateSystem {
+    parentName: string | undefined;
+    syntax: SyntaxOperators = new Map();
     preds: Lookup<predicate>;
-    constructor() {
+    constructor(private readonly resolveSystem?: (name: string) => predicateSystem) {
 
         this.preds = new Lookup();
     }
@@ -27,7 +29,30 @@ class predicateSystem {
      * Find predicate and return it
      */
     grabPred(name: Expr | string): predicate {
-        return resolve(this.preds.grab(name), name);
+        const local = this.preds.get(name);
+        const parent = this.parentName && this.resolveSystem ? this.resolveSystem(this.parentName) : undefined;
+        if (!parent?.hasPredicate(name)) return resolve(local,name);
+        const inherited = parent.grabPred(name);
+        if (!local) return inherited;
+        const arities = new Set(local.defs.map(def => def.args.length));
+        const extra = inherited.defs.filter(def => !arities.has(def.args.length));
+        if (!extra.length) return local;
+        const combined = new predicate(local.key,this);
+        combined.defs = [...local.defs,...extra];
+        return combined;
+    }
+
+    hasPredicate(name: Expr | string): boolean {
+        if (this.preds.has(name)) return true;
+        return !!(this.parentName && this.resolveSystem?.(this.parentName).hasPredicate(name));
+    }
+
+    dependencyPredicate(dep: Dep): predicate {
+        if (dep.systemName === undefined) return this.grabPred(dep.pred);
+        if (!this.resolveSystem) throw new Error(`Unknown predicate system: ${dep.systemName}`);
+        const system = this.resolveSystem(dep.systemName);
+        if (!system.hasPredicate(dep.pred)) throw new Error(`Unknown predicate: ${dep.systemName}:${dep.pred.match}`);
+        return system.grabPred(dep.pred);
     }
     /**
      * Can handle pure string input, then uses parseCheck.
@@ -99,12 +124,7 @@ class predicate {
 
         for (let def of this.defs) {
             if (debug) logToConsole('Pred: ' + this.key)
-            let q = def.test(Inps);
-
-            //if query fails test next definition
-            if (!q) continue;
-            //return successful definition
-            yield q;
+            yield* def.solutions(Inps);
         }
         yield false;
     }
@@ -126,10 +146,15 @@ class definition {
 
      */
     test(Inps: readonly Expr[]): false | Expr[] {
+        const result = this.solutions(Inps).next();
+        return result.done ? false : result.value;
+    }
+
+    *solutions(Inps: readonly Expr[]): Generator<Expr[], void, unknown> {
         let vars: Lookup<Expr> = new Lookup()
 
         //both arguments are the same length. (Heuristic)
-        if (Inps.length != this.args.length) { return false }
+        if (Inps.length != this.args.length) return;
 
         // Standardize apart: head and body share fresh identities for this invocation only.
         const scope = ++nextClauseScope;
@@ -142,18 +167,15 @@ class definition {
         );
         const args = this.args.map(fresh);
         const deps = this.deps.map((dep): Dep => ({
-            pred: fresh(dep.pred), args: dep.args.map(fresh), not: dep.not
+            ...dep, pred: fresh(dep.pred), args: dep.args.map(fresh)
         }));
 
         //every argument evaluates with each input, and variables are updated accordingly.
-        if (!args.every((arg, i): boolean => this.unify(vars, arg, resolve(Inps[i])))) { return false }
+        if (!args.every((arg, i): boolean => this.unify(vars, arg, resolve(Inps[i])))) return;
 
-        let v = this.assign(deps, vars)
-
-        if (!v) return false;
-
-        //finds all updated values of args and returns them
-        return this.mapExprTree(Inps, v);
+        for (const bindings of this.assignSolutions(deps, vars)) {
+            yield this.mapExprTree(Inps, bindings);
+        }
     }
     /**
      * Map an Expr tree by replacing VAR/ATOM nodes via a lookup.
@@ -219,50 +241,34 @@ class definition {
     /**
      * finds an assignment given dependencies in Arr, and a current assignment mapping.
      */
-    assign(Arr: Deps, Assignment: Lookup<Expr>): false | Lookup<Expr> {
-        //escape condition, no more dependencies, return assignment
-        if (Arr.length == 0) { return Assignment; }
-        //find information about current dependency
-        const dep = resolve(Arr[0]);
-        let arr = Arr.slice(1);
-        let pred = resolve(this.system.preds.grab(dep.pred), dep.pred);
-        let not = dep.not ?? false;
+    assign(Arr: Deps, assignment: Lookup<Expr>): false | Lookup<Expr> {
+        const result = this.assignSolutions(Arr, assignment).next();
+        return result.done ? false : result.value;
+    }
 
-        /**
-
-         * update args from assignment
-
-         */
-        let args = this.mapExprTree(dep.args, Assignment)
-        //query predicate with args
-        let query = pred.query(args);
-
-        if (not) {
-            //succeed only if no solution exists
-            for (let r = query.next(); !r.done; r = query.next()) {
-                if (r.value) return false;
+    *assignSolutions(deps: Deps, assignment: Lookup<Expr>): Generator<Lookup<Expr>, void, unknown> {
+        if (deps.length === 0) {
+            yield assignment;
+            return;
+        }
+        const dep = resolve(deps[0]);
+        const rest = deps.slice(1);
+        const pred = this.system.dependencyPredicate(dep);
+        const args = this.mapExprTree(dep.args, assignment);
+        if (dep.not) {
+            for (const result of pred.query(args)) {
+                if (result) return;
             }
-            return this.assign(arr, Assignment);
+            yield* this.assignSolutions(rest, assignment);
+            return;
         }
-        //foreach yeild of query
-        for (let r = query.next(); !r.done; r = query.next()) {
-            //find the next set of values
-            let t = r.value;
-            //if there are no more continue
-            if (!t) continue;
-            //copy assignment
-            let ass = new Lookup(Assignment);
-            //apply current bindings
-            if (!t.every((val, i): boolean => this.unify(ass, resolve(args[i]), val))) continue;
-            //test current bindings
-            let back = this.assign(arr, ass);
-            //if there are no other solutions continue
-            if (!back) continue;
-            //if there are return the solution
-            return back;
+        for (const result of pred.query(args)) {
+            if (!result) continue;
+            const branch = new Lookup(assignment);
+            if (result.every((value, index): boolean => this.unify(branch, resolve(args[index]), value))) {
+                yield* this.assignSolutions(rest, branch);
+            }
         }
-        //there is no solution
-        return false;
     }
 
 }

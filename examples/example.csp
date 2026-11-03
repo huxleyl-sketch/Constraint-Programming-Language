@@ -12,6 +12,3 @@ def system := {
         ~equal(X,Y),
         parent(Y,Z).
 };
-system[parent(X1,X3)];
-system[parent(X2,X3)];
-system[parent(X3,X4)];

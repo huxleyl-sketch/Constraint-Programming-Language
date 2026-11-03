@@ -1,21 +1,21 @@
-function Dfs(problem: Problem, domains: Domains): Assignment | false {
+function* Dfs(problem: Problem, domains: Domains): Solutions {
     const names = [...domains.keys()];
     const assignment = new Map<VariableId, Expr>();
 
-    function search(index: number): Assignment | false {
+    function* search(index: number): Solutions {
         if (index === names.length) {
             const valid = problem.constraints.every((con): boolean => problem.check(con, con.scope.map((name): Expr => resolve(assignment.get(name)))));
-            return valid ? names.map((name): { readonly key: string; readonly val: Expr } =>
-                ({ key: name, val: resolve(assignment.get(name)) })) : false;
+            if (valid) yield Object.freeze(names.map((name): { readonly key: string; readonly val: Expr } =>
+                Object.freeze({ key: name, val: resolve(assignment.get(name)) })));
+            return;
         }
         const name = resolve(names[index]);
         for (const value of resolve(domains.get(name))) {
             assignment.set(name, value);
-            const result = search(index + 1);
-            if (result !== false) return result;
+            yield* search(index + 1);
         }
         assignment.delete(name);
-        return false;
+        return;
     }
-    return search(0);
+    yield* search(0);
 }

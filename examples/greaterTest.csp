@@ -1,0 +1,15 @@
+import system from (./example.csp);
+import standard from (../lib/standard.csp);
+
+let X^3 := [0,s(0),s(s(0))];
+let X0 := [m,h,n,s(d)];
+let X3 := [m,s(c),n,k];
+def test := {
+  nat(0).
+  nat(s(X)) <- nat(X).
+
+  greater(0,s(X)) <- nat(X).
+  greater(s(X),s(Y)) <- greater(X,Y).
+};
+test[greater(X1,X2)];
+system[parent(X0,X3)];

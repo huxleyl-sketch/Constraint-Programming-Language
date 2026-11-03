@@ -6,7 +6,11 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "watch": "tsc --watch",
-    "test": "npm run build && node tests/solver-state.cjs"
+    "test": "npm run build && node tests/solver-state.cjs && node tests/imports.cjs && node tests/terminal.cjs && node tests/browser-console.cjs && node tests/standard.cjs && node tests/syntax.cjs && node tests/inheritance.cjs",
+    "preconsole": "npm run build",
+    "console": "node terminal.cjs",
+    "test:editor": "node --test vscode-csp/tests/analysis.cjs vscode-csp/tests/tokens.cjs vscode-csp/tests/extension.cjs vscode-csp/tests/snippets.cjs",
+    "check": "npm test && npm run test:editor"
   },
   "devDependencies": {
     "typescript": "~5.9.3"

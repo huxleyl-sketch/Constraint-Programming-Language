@@ -39,27 +39,39 @@
     </style>
  </head>
  <body>
+    <label for="algorithm">Choose a solving algorithm:</label>
+    <select id="algorithm">
+        <option value="">Select an algorithm?</option>
+        <option value="dfs">DFS ? depth-first search</option>
+        <option value="mac">MAC ? search with arc consistency</option>
+    </select>
+    <br>
     <label for="fileInput">Upload .csp file: </label>
     <input 
         type="file" 
         id="fileInput"
         accept=".csp"
     />
+    <label>Import folder <input type="file" id="dependencyInput" webkitdirectory multiple /></label>
     <button id="save-button">Save Current File</button>
     <pre id="output" contenteditable="true"></pre>
 
     <div class="console-container">
         <div id="console-output"></div>
+        <button id="solve-button">Solve</button>
+        <button id="next-button">Next solution</button>
+        <button id="stop-button">Stop</button>
         <input type="text" id="console-input" placeholder="Enter code and press Enter...">
     </div>
 
-    <script src="dist/tokeniser.js"></script>
-    <script src="dist/parser.js"></script>
-    <script src="dist/predicateSolverExpr.js"></script>
-    <script src="dist/constraintSystem.js"></script>
-    <script src="dist/dfs.js"></script>
-    <script src="dist/CSP Algorithms/AC-3.js"></script>
-    <script src="dist/CSP Algorithms/MAC.js"></script>
-    <script src="dist/main.js"></script>
-    <script src="dist/content.js"></script>
+    <script src="dist/src/tokeniser.js"></script>
+    <script src="dist/src/parser.js"></script>
+    <script src="dist/src/predicateSolverExpr.js"></script>
+    <script src="dist/src/constraintSystem.js"></script>
+    <script src="dist/src/algorithms/dfs.js"></script>
+    <script src="dist/src/algorithms/AC-3.js"></script>
+    <script src="dist/src/algorithms/MAC.js"></script>
+    <script src="dist/src/main.js"></script>
+    <script src="dist/src/solutionSession.js"></script>
+    <script src="dist/src/content.js"></script>
 </body>

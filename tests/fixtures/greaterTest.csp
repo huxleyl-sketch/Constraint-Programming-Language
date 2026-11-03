@@ -1,0 +1,8 @@
+let X^3 := [0,s(0),s(s(0))];
+def test := {
+    nat(0).
+    nat(s(X)) <- nat(X).
+    greater(0,s(X)) <- nat(X).
+    greater(s(X),s(Y)) <- greater(X,Y).
+};
+test[greater(X1,X2)];
