@@ -3,8 +3,31 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { analyze } = require('../analysis');
 
+test('hidden tags apply to all clauses of one signature and survive imports and inheritance', () => {
+    const source = `def library := {
+        % @hidden
+        helper(X,X).
+        helper(a,b).
+        helper(a).
+        % @hidden secret/1
+        secret(a).
+        visible(X) <- secret(X).
+    };`;
+    const library = analyze(source);
+    assert.deepEqual(library.diagnostics,[]);
+    const signatures = library.systems[0].signatures;
+    assert.equal(signatures.find(p => p.name === 'helper' && p.arity === 2).hidden,true);
+    assert.equal(signatures.find(p => p.name === 'helper' && p.arity === 1).hidden,false);
+    assert.equal(signatures.find(p => p.name === 'secret').hidden,true);
+    const consumer = analyze('import library from (lib); def child extends library := { use(X) <- secret(X). };',()=>library);
+    assert.deepEqual(consumer.diagnostics,[]);
+    assert.equal(consumer.systems[1].signatures.find(p => p.name === 'secret').hidden,true);
+    const override = analyze(source + 'def child extends library := { secret(b). };');
+    assert.equal(override.systems[1].signatures.find(p => p.name === 'secret').hidden,false);
+});
+
 test('extends inherits predicates, signatures and syntax with local overrides', () => {
-    const text = `def base := { syntax[opp yfx combine/3.]. combine(A,B,pair(A,B)). p(a). p(a,b). };
+    const text = `def base := { syntax[opp yfx combine/2.]. combine(A,B,pair(A,B)). p(a). p(a,b). };
         def child extends base := { p(c). inherited(X) <- p(X). pair(A,B) <- p(A,B). };
         def grandchild extends child := {};`;
     const result = analyze(text);
@@ -23,8 +46,8 @@ test('extends inherits predicates, signatures and syntax with local overrides', 
 });
 
 test('system syntax is exported and imported without sibling declarations leaking', () => {
-    const library = analyze(`def lib := { syntax[opp xfx =/2. opp yfx merge/3.]. =(X,X). merge(A,B,pair(A,B)). };
-        def hidden := { syntax[opp xfx secret/3.]. secret(a,b,c). };`);
+    const library = analyze(`def lib := { syntax[opp 599 xfx =/2. opp yfx merge/2.]. =(X,X). merge(A,B,pair(A,B)). };
+        def hidden := { syntax[opp xfx secret/2.]. secret(a,b,c). };`);
     assert.deepEqual(library.diagnostics,[]);
     assert.equal(library.systems[0].syntax.size,2);
     const text = `import lib from (./library.csp);
@@ -34,15 +57,15 @@ test('system syntax is exported and imported without sibling declarations leakin
     assert.deepEqual(result.diagnostics,[]);
     assert.ok(result.references.filter(ref => ref.value === 'merge').every(ref => ref.systemName === 'lib'));
     assert.ok(analyze(text.replace('A merge B','A secret B'),() => library).diagnostics.some(d => d.severity === 'error'));
-    const independent = analyze(`def a := { syntax[opp xfx =/2. opp yfx merge/3.]. =(X,X). merge(A,B,p(A,B)).
+    const independent = analyze(`def a := { syntax[opp 599 xfx =/2. opp yfx merge/2.]. =(X,X). merge(A,B,p(A,B)).
         c(A,B,C,R) <- R = A merge B merge C. };
-        def b := { syntax[opp xfx =/2. opp xfy merge/3.]. =(X,X). merge(A,B,p(A,B)).
+        def b := { syntax[opp 599 xfx =/2. opp xfy merge/2.]. =(X,X). merge(A,B,p(A,B)).
         c(A,B,C,R) <- R = A merge B merge C. };`);
     assert.deepEqual(independent.diagnostics,[]);
 });
 
-test('syntax declarations resolve named infix operations and nested result expressions', () => {
-    const text = `syntax[opp xfx =/2. opp yfx combine/3. opp xfx related/2.].
+test('syntax declarations resolve infix calls and nested compound terms', () => {
+    const text = `syntax[opp 599 xfx =/2. opp yfx combine/2. opp xfx related/2.].
         def s := { =(X,X). combine(A,B,pair(A,B)). related(a,b). check(pair(a,b)).
             calc(A,B,C) <- C = A combine B.
             nested(A,B) <- check(A combine B).
@@ -52,24 +75,31 @@ test('syntax declarations resolve named infix operations and nested result expre
     const result = analyze(text);
     assert.deepEqual(result.diagnostics, []);
     const calls = result.references.filter(ref => ref.kind === 'predicate' && ref.value === 'combine');
-    assert.equal(calls.length,4);
-    assert.ok(calls.every(ref => ref.target?.arity === 3));
+    assert.equal(calls.length,0);
     assert.equal(result.operators.get('combine').associativity,'yfx');
     assert.equal(result.operators.get('=').precedence,599);
     assert.ok(analyze(text.replace('C = A combine B','C := A combine B')).diagnostics
         .some(item => item.message.includes('only for declarations')));
 });
 
+test('infix terms in heads, negation and domains are not predicate calls', () => {
+    const result = analyze(`syntax[opp 599 xfx =/2. opp yfx pair/2.].
+        def s := { =(X,X). check(a pair b). different(A,B) <- ~check(A pair B). };
+        let X := [a pair b]; s[check(X)];`);
+    assert.deepEqual(result.diagnostics,[]);
+    assert.equal(result.references.filter(ref => ref.kind === 'predicate' && ref.value === 'pair').length,0);
+});
+
 test('operator association, declaration validation and source positions', () => {
-    const prefix = 'syntax[opp xfx =/2. opp xfx combine/3.]. def s := { =(X,X). combine(A,B,p(A,B)). ';
+    const prefix = 'syntax[opp 599 xfx =/2. opp xfx combine/2.]. def s := { =(X,X). combine(A,B,p(A,B)). ';
     const input = prefix + 'calc(A,B,C,D) <- D = A combine B combine C. };';
     const result = analyze(input);
     const diagnostic = result.diagnostics.find(item => item.message.includes('parentheses'));
     assert.ok(diagnostic);
     assert.equal(diagnostic.start,input.lastIndexOf('combine'));
-    for (const bad of ['syntax[opp yfx p/4.].','syntax[opp nope p/3.].',
-        'syntax[opp 600 yfx p/3.].','syntax[opp yfx p/3.]',
-        'syntax[opp yfx p/3.]. syntax[opp yfx p/3.].']) {
+    for (const bad of ['syntax[opp yfx p/3.].','syntax[opp yfx p/4.].','syntax[opp nope p/3.].',
+        'syntax[opp 600 yfx p/2.].','syntax[opp yfx p/2.]',
+        'syntax[opp yfx p/2.]. syntax[opp yfx p/2.].']) {
         assert.ok(analyze(bad).diagnostics.some(item => item.severity === 'error'),bad);
     }
     assert.deepEqual(analyze(prefix.replace('xfx combine','yfx combine') +
@@ -107,7 +137,7 @@ test('imports declare external systems without false unknown-predicate errors', 
 });
 
 test('declared symbolic predicates resolve infix calls', () => {
-    const result = analyze('def s := { syntax[opp xfx =/2.]. =(X,X). same(A,B) <- A = B. different(A,B) <- ~A = B. };');
+    const result = analyze('def s := { syntax[opp 599 xfx =/2.]. =(X,X). same(A,B) <- A = B. different(A,B) <- ~A = B. };');
     assert.deepEqual(result.diagnostics, []);
     const calls = result.references.filter(ref => ref.kind === 'predicate' && ref.value === '=');
     assert.equal(calls.length, 2);
@@ -189,4 +219,68 @@ test('predicate documentation follows the first clause per name and arity across
     const detached = analyze('def s := {\n % Detached comment.\n\n p(a).\n q(a). % Inline comment.\n r(a).\n};');
     assert.equal(detached.systems[0].predicates.find(item => item.name === 'p').documentation, '');
     assert.equal(detached.systems[0].predicates.find(item => item.name === 'r').documentation, '');
+});
+
+
+test('prefix and suffix operators respect arity, priority, grouping and scope', () => {
+    const source = `def unary := { syntax[opp 599 xfx =/2. opp 500 fx double/1.
+        opp 500 fy repeat/1. opp 500 xf finish/1. opp 500 yf again/1.].
+        =(X,X). double 1. 1 finish. check(double 1).
+        wrapped(double A) <- check(double A). negative(A) <- ~check(double A).
+        calc(R) <- R = repeat repeat 1. calcSuffix(R) <- R = 1 again again.
+        grouped(R) <- R = double (double 1). atom(R) <- R = double1.
+    }; def child extends unary := { inherited(R) <- R = repeat repeat 1. };`;
+    const library = analyze(source);
+    assert.deepEqual(library.diagnostics,[]);
+    assert.equal(library.systems[0].predicates.find(p=>p.name === 'double').arity,1);
+    const imported = analyze('import unary from (library); def consumer := { value(R) <- R = double 1. }; let X := [double 1]; unary[check(X)];',()=>library);
+    assert.deepEqual(imported.diagnostics,[]);
+    for (const expression of ['double double 1','1 finish finish']) {
+        const bad = analyze(source + `def bad extends unary := { value(R) <- R = ${expression}. };`);
+        assert.ok(bad.diagnostics.some(d=>d.message.includes('parentheses')),expression);
+    }
+    for (const declaration of ['opp fx wrong/2.','opp yf wrong/2.','opp yfx wrong/1.'])
+        assert.ok(analyze('syntax['+declaration+'].').diagnostics.some(d=>d.message.includes('arity')));
+});
+
+
+test('all three bracket pairs group operator expressions inside existing language constructs', () => {
+    for (const [open,close] of [['(',')'],['[',']'],['{','}']]) {
+        const source = `syntax[opp fx double/1.]. def s := { syntax[opp 599 xfx =/2. opp fx double/1. opp xf finish/1.].
+            =(X,X). check(double(1)). head(${open}double A${close}) <- check(double A).
+            calc(R) <- R = double ${open}double 1${close}.
+            suffix(R) <- R = ${open}1 finish${close} finish.
+        }; let X := [${open}double 1${close}]; s[${open}check(X)${close}];`;
+        assert.deepEqual(analyze(source).diagnostics,[],open);
+    }
+    for (const expression of ['double [1}', 'double {1]', 'double []']) {
+        const result = analyze(`syntax[opp fx double/1.]. def s := { check(${expression}). };`);
+        assert.ok(result.diagnostics.some(d=>d.severity === 'error'),expression);
+    }
+});
+
+
+test('standard digit prefixes and finite-list notation work through imports', () => {
+    const library = analyze(fs.readFileSync(require('node:path').join(__dirname, '../../lib/standard.csp'), 'utf8'));
+    assert.deepEqual(library.diagnostics.filter(item => item.severity !== 'warning'), []);
+    const result = analyze(`import standard from (library);
+        def use extends standard := {
+            digits(1 9).
+            nested([[a | []] | []]).
+            total(N) <- sum([9 | 2 | []],N).
+            calculate(N) <- fastAdd(1 9,1,N).
+        };`, () => library);
+    assert.deepEqual(result.diagnostics.filter(item => item.severity !== 'warning'), []);
+});
+
+
+test('operator whitespace tags, longest matches, retries and digit chains', () => {
+    const source = `def joined := { syntax[
+        opp w/o 550 yfx +/2. opp w/o 300 fy 1/1. opp w/o 300 fy 0/1.
+        opp w xfx in/2. opp w/o xfx <=/2. opp w/o xfx </2.
+    ]. equal(X,X). check(R) <- equal(R,100+11). word(thing). relation(a<=b).
+       separated(a in b). bounded((a)in(b)). };
+       def fallback := { syntax[opp w/o 500 xf <=/1. opp w/o 550 xfx </2.
+       opp w/o 300 fy =/1.]. equal(X,X). check(R) <- equal(R,a<=b). };`;
+    assert.deepEqual(analyze(source).diagnostics.filter(d=>d.severity !== 'warning'),[]);
 });

@@ -4,5 +4,5 @@ let A := [2,3];
 let B := [4];
 let C := [5];
 let Result := [n(2,2),n(2,3)];
-arithmetic[Result = A add B mult C];
-arithmetic[A less B];
+arithmetic[calculate(A,B,C,Result)];
+arithmetic[A < B];

@@ -1,5 +1,6 @@
 'use strict';
 const tokenDefinitions = require('./tokens.json');
+const { joinedTokenizations } = require('./operator-lexing');
 // Keep keyword boundaries for editor usability while retaining runtime token order.
 const tokenPatterns = tokenDefinitions.map(token => ({
     ...token,
@@ -100,18 +101,23 @@ function analyze(text, readImport, filename) {
             let p = n + 2;
             while (tokens[p]?.value === 'opp') {
                 p++;
+                let spacing;
+                if (tokens[p]?.value === 'w') {
+                    p++; spacing = 'w';
+                    if (tokens[p]?.value === '/' && tokens[p + 1]?.value === 'o') { p += 2; spacing = 'w/o'; }
+                }
                 let precedence;
                 if (/^\d+$/.test(tokens[p]?.value ?? '')) precedence = Number(tokens[p++].value);
                 const associativity = tokens[p++]?.value;
                 const rawName = tokens[p++];
-                const joinedSlash = rawName?.kind === 'OPERATOR' && rawName.value.length > 1 && rawName.value.endsWith('/');
+                const joinedSlash = rawName?.kind === 'ATOM' && rawName.value.length > 1 && rawName.value.endsWith('/');
                 const token = joinedSlash ? { ...rawName,value:rawName.value.slice(0,-1),end:rawName.end-1 } : rawName;
                 const slash = joinedSlash ? { value:'/' } : tokens[p++];
                 const arity = Number(tokens[p++]?.value);
-                precedence ??= arity === 2 ? 599 : 550;
-                if (!token || !['yfx','xfy','xfx'].includes(associativity) || slash?.value !== '/' ||
-                    ![2,3].includes(arity) || tokens[p++]?.value !== '.') break;
-                if (!target.has(token.value)) target.set(token.value,{ token, associativity, arity, precedence, system: owner });
+                precedence ??= 550;
+                if (!token || !['yfx','xfy','xfx','fx','fy','xf','yf'].includes(associativity) || slash?.value !== '/' ||
+                    arity !== (associativity.length === 2 ? 1 : 2) || tokens[p++]?.value !== '.') break;
+                if (!target.has(token.value)) target.set(token.value,{ token, associativity, arity, precedence, spacing, system: owner });
             }
         }
         if (['(', '[', '{'].includes(tokens[n].value)) declarationDepth++;
@@ -120,7 +126,7 @@ function analyze(text, readImport, filename) {
     for (const owner of systemParents.keys()) inheritSyntax(owner);
     let i = 0;
     const peek = () => tokens[i] || eof;
-    const startsTerm = () => /^(?:[a-zA-Z0-9]\w*|_|[=<>!+*\/&?\-]+)$/.test(peek().value);
+    const startsTerm = () => ['(', '[', '{'].includes(peek().value) || /^(?:[a-zA-Z0-9]\w*|_|[=<>!+*\/&?|\-$@#\\'"`]+)$/.test(peek().value);
     const take = () => tokens[i++] || eof;
     const accept = value => peek().value === value ? take() : undefined;
     const expect = value => {
@@ -138,49 +144,101 @@ function analyze(text, readImport, filename) {
         symbols.push(result);
         return result;
     };
+    let parsingJoined = false;
     function term(context, minimum = 0) {
+        if (parsingJoined) return parseTerm(context,minimum);
+        const start = i;
+        let end = start;
+        while (end < tokens.length && !['.',';','<-'].includes(tokens[end].value)) end++;
+        const original = tokens.slice(start,end);
+        const names = new Set([...operators.keys(), ...[...systemOperators.values(),...importedOperators.values()].flatMap(map => [...map.keys()])]);
+        const specs = new Map([...names].map(name => [name,operatorFor(context,name)]).filter(([,spec]) => spec));
+        const referenceCount = references.length, diagnosticCount = diagnostics.length;
+        let failure;
+        const replaceExpression = replacement => {
+            let boundary = start;
+            while (boundary < tokens.length && !['.',';','<-'].includes(tokens[boundary].value)) boundary++;
+            tokens.splice(start,boundary - start,...replacement);
+        };
+        for (const variant of joinedTokenizations(original,specs)) {
+            replaceExpression(variant);
+            i = start; references.length = referenceCount; diagnostics.length = diagnosticCount;
+            parsingJoined = true;
+            try { return parseTerm(context,minimum); }
+            catch (error) { failure ||= { error, diagnostics: diagnostics.slice(diagnosticCount) }; }
+            finally { parsingJoined = false; }
+        }
+        replaceExpression(original);
+        i = start; references.length = referenceCount; diagnostics.length = diagnosticCount;
+        if (failure) { diagnostics.push(...failure.diagnostics); throw failure.error; }
+        return parseTerm(context,minimum);
+    }
+    function parseTerm(context, minimum = 0) {
         let left;
-        if (accept('(')) {
+        const prefix = peek().literal ? undefined : operatorFor(context,peek().value);
+        const following = operatorFor(context,tokens[i + 1]?.value);
+        if (prefix && ['fx','fy'].includes(prefix.associativity) &&
+            (!following || ['fx','fy'].includes(following.associativity)) &&
+            (['ATOM','VAR','ANY'].includes(tokens[i + 1]?.kind) || ['[','{'].includes(tokens[i + 1]?.value))) {
+            const token = take();
+            if (prefix.ambiguous) issue(token,`Ambiguous syntax operator '${token.value}'; qualify the predicate system.`);
+            const operand = term(context,600 - prefix.precedence + (prefix.associativity === 'fx' ? 1 : 0));
+            if ((operand.priority || 0) > prefix.precedence || (operand.priority === prefix.precedence && prefix.associativity === 'fx')) {
+                issue(token,'Operator requires parentheses at equal or weaker precedence.');
+                throw new Error('syntax');
+            }
+            left = { token, args: [operand], call: true, systemName: prefix.system, priority: prefix.precedence };
+        } else if (['(', '[', '{'].includes(peek().value)) {
+            const opening = take().value;
+            if (opening === '[' && peek().value === ']' && operatorFor(context,'|')) {
+                const token = take();
+                return { token: { ...token, value: 'nil' }, args: [], call: false, priority: 0 };
+            }
             left = term(context);
-            expect(')');
+            expect(opening === '(' ? ')' : opening === '[' ? ']' : '}');
+            left = { ...left, priority: 0 };
         } else {
-        const token = name(/^(?:[a-zA-Z0-9]\w*|_|[=<>!+*\/&?\-]+)$/);
+        const token = name(/^(?:[a-zA-Z0-9]\w*|_|[=<>!+*\/&?|\-$@#\\'"`]+)$/);
         if (/^[A-Z]/.test(token.value)) references.push({ ...token, kind: context.query ? 'global' : 'local', context });
         const args = [];
         let call = false;
         if (accept('(')) {
             if (peek().value !== ')') {
                 args.push(term(context));
-                while (accept(',') || startsTerm() || peek().value === '(') args.push(term(context));
-                for (const arg of args) if (arg.relation) issue(arg.token,'A /2 relation cannot be used as a value.');
+                while (true) {
+                    const comma = accept(',');
+                    if (!comma && !startsTerm() && peek().value !== '(') break;
+                    if (!comma && tokens[i - 1]?.end === peek().start) {
+                        issue(peek(),'Adjacent arguments need a comma or whitespace.'); throw new Error('syntax');
+                    }
+                    args.push(term(context));
+                }
             }
             expect(')');
             if (/^[A-Z_]/.test(token.value)) issue(token, 'A predicate or compound term must start with a lowercase letter or digit.');
             call = true;
         }
         left = { token, args, call };
-        if (token.kind === 'OPERATOR' && !call) issue(token, 'A symbolic predicate requires parentheses or two operands.');
         }
-        let previous;
         while (true) {
-            const spec = operatorFor(context,peek().value);
-            if (!spec || 600 - spec.precedence < minimum) break;
+            const spec = peek().literal ? undefined : operatorFor(context,peek().value);
+            if (!spec || ['fx','fy'].includes(spec.associativity) || 600 - spec.precedence < minimum) break;
             if (spec.ambiguous) issue(peek(),`Ambiguous syntax operator '${peek().value}'; qualify the predicate system.`);
-            if (previous?.precedence === spec.precedence &&
-                (previous.associativity === 'xfx' || spec.associativity !== 'yfx')) {
-                issue(peek(), 'Chained operators at this precedence require parentheses.');
+            if ((left.priority || 0) > spec.precedence || (left.priority === spec.precedence && spec.associativity.startsWith('x'))) {
+                issue(peek(), 'Operator requires parentheses at equal or weaker precedence.');
                 throw new Error('syntax');
             }
             const operator = take();
-            if (context.domain && operatorFor(context,operator.value)) issue(operator,'Operations are not evaluated in domain declarations.');
-            const right = term(context, 600 - spec.precedence + (spec.associativity === 'xfy' ? 0 : 1));
-            for (const operand of [left,right]) if (operand.relation) issue(operand.token,'A /2 relation cannot be used as a value.');
-            const reference = { ...operator, kind: 'predicate', arity: spec.arity, context, systemName: spec.system };
-            // A named /3 use is a predicate dependency even when nested in an argument.
-            if (spec.arity === 3) references.push(reference);
-            left = { token: operator, args: [left, right], call: true, operation: spec.arity === 3, relation: spec.arity === 2,
-                systemName: spec.system, reference: spec.arity === 3 ? reference : undefined };
-            previous = spec;
+            const args = [left];
+            if (spec.arity === 2) {
+                const right = term(context, 600 - spec.precedence + (spec.associativity.endsWith('y') ? 0 : 1));
+                if ((right.priority || 0) > spec.precedence || (right.priority === spec.precedence && spec.associativity.endsWith('x'))) {
+                    issue(operator,'Operator requires parentheses at equal or weaker precedence.');
+                    throw new Error('syntax');
+                }
+                args.push(right);
+            }
+            left = { token: operator, args, call: true, systemName: spec.system, priority: spec.precedence };
         }
         return left;
     }
@@ -201,14 +259,9 @@ function analyze(text, readImport, filename) {
             issue(peek(),':= is only for declarations; use a relation such as C = A op B.');
             throw new Error('syntax');
         }
-        if (result.operation) issue(result.token, 'A /3 operation requires a result relation.');
-        const nestedOperations = references.slice(before).filter(ref => ref.kind === 'predicate' && ref.arity === 3);
-        if (negated && nestedOperations.length) issue(result.token,'Result expressions under negation require a wrapper predicate.');
-        if (definition && nestedOperations.some(ref => ref !== result.reference))
-            issue(result.token,'Nested result expressions belong in rule bodies, not clause heads.');
         if (!result.call) issue(result.token, 'Expected a predicate with parentheses.');
         if (definition) {
-            const declaration = symbol(result.token, 'predicate', { arity: result.operation ? 3 : result.args.length, system: context.system });
+            const declaration = symbol(result.token, 'predicate', { arity: result.args.length, system: context.system });
             context.system.predicates.push(declaration);
         } else if (result.reference) result.reference.systemName = systemName || result.reference.systemName;
         else references.push({ ...result.token, kind: 'predicate', arity: result.args.length, context, systemName: systemName || result.systemName });
@@ -247,20 +300,24 @@ function analyze(text, readImport, filename) {
         take(); expect('[');
         while (peek().value && peek().value !== ']') {
             expect('opp');
+            if (peek().value === 'w') {
+                take();
+                if (accept('/')) expect('o');
+            }
             let priority;
             if (/^\d+$/.test(peek().value)) priority = Number(take().value);
             const associativity = take();
-            if (!['yfx','xfy','xfx'].includes(associativity.value)) issue(associativity,'Expected yfx, xfy or xfx.');
-            const rawName = name(/^(?:[a-z]\w*|[=<>!+*\/&?\-]+)$/);
-            const joinedSlash = rawName.kind === 'OPERATOR' && rawName.value.length > 1 && rawName.value.endsWith('/');
+            if (!['yfx','xfy','xfx','fx','fy','xf','yf'].includes(associativity.value)) issue(associativity,'Expected fx, fy, xf, yf, yfx, xfy or xfx.');
+            const rawName = name(/^(?:[a-z]\w*|[0-9]|[=<>!+*\/&?|\-$@#\\'"`]+)$/);
+            const joinedSlash = rawName.kind === 'ATOM' && rawName.value.length > 1 && rawName.value.endsWith('/');
             const token = joinedSlash ? { ...rawName,value:rawName.value.slice(0,-1),end:rawName.end-1 } : rawName;
             if (['let','def','import','from','syntax','opp'].includes(token.value)) issue(token,'Reserved syntax operator name.');
             if (declaredOperators.has((owner || '') + ':' + token.value)) issue(token,`Duplicate syntax operator '${token.value}'.`);
             declaredOperators.add((owner || '') + ':' + token.value);
             if (!joinedSlash) expect('/');
             const arity = name(/^\d+$/);
-            priority ??= Number(arity.value) === 2 ? 599 : 550;
-            if (![2,3].includes(Number(arity.value))) issue(arity,'Syntax operators require arity 2 or 3.');
+            priority ??= 550;
+            if (Number(arity.value) !== (associativity.value.length === 2 ? 1 : 2)) issue(arity,'Unary operators require arity 1; infix operators require arity 2.');
             if (priority < 1 || priority > 599) issue(token,'Operator priority must be 1 through 599.');
             expect('.');
         }
@@ -337,6 +394,21 @@ function analyze(text, readImport, filename) {
         }
         if (i === before) take();
     }
+    for (const system of systems) {
+        if (system.imported) continue;
+        const hidden = new Set();
+        const body = text.slice(system.bodyStart,system.bodyEnd);
+        for (const match of body.matchAll(/^\s*%\s*@hidden\s+(\S+)\/(\d+)\s*$/gm))
+            hidden.add(`${match[1]}/${Number(match[2])}`);
+        for (const pred of system.predicates) {
+            if (/^\s*@hidden\s*$/m.test(pred.documentation || '')) hidden.add(`${pred.name}/${pred.arity}`);
+        }
+        system.hiddenSignatures = hidden;
+        for (const pred of system.predicates) {
+            pred.hidden = hidden.has(`${pred.name}/${pred.arity}`);
+            pred.documentation = (pred.documentation || '').split('\n').filter(line => !/^\s*@hidden(?:\s|$)/.test(line)).join('\n');
+        }
+    }
     for (const ref of references) {
         if (ref.kind === 'global') {
             ref.target = globals.get(ref.value);
@@ -381,14 +453,22 @@ function analyze(text, readImport, filename) {
             if (own.some(item => item.name === pred.name && item.arity === pred.arity)) continue;
             own.push({ name: pred.name, arity: pred.arity, kind: 'predicate', system: { name: system.name },
                 start: pred.start, end: pred.end, filename: pred.filename,
-                definition: pred.definition, documentation: pred.documentation });
+                definition: pred.definition, documentation: pred.documentation, hidden: pred.hidden });
         }
         const seen = new Set(own.map(pred => `${pred.name}/${pred.arity}`));
         for (const pred of signatures(systems.find(item => item.name === system.parentName),visited))
-            if (!seen.has(`${pred.name}/${pred.arity}`)) { own.push(pred); seen.add(`${pred.name}/${pred.arity}`); }
+            if (!seen.has(`${pred.name}/${pred.arity}`)) {
+                own.push(system.hiddenSignatures?.has(`${pred.name}/${pred.arity}`) ? { ...pred,hidden:true } : pred);
+                seen.add(`${pred.name}/${pred.arity}`);
+            }
         return own;
     }
     for (const system of systems) if (!system.imported) system.signatures = signatures(system);
+    for (const ref of references) if (ref.kind === 'predicate') {
+        const owner = ref.systemName !== undefined ? systems.find(system => system.name === ref.systemName) :
+            ref.context.system || systems.find(system => system.name === ref.context.systemName);
+        ref.hidden = !!owner?.signatures.find(pred => pred.name === ref.value && pred.arity === ref.arity)?.hidden;
+    }
     return { diagnostics, symbols, references, systems, globals, tokens, operators };
 }
 module.exports = { analyze };

@@ -1,0 +1,19 @@
+import standard from (../lib/standard.csp);
+let X^80 := [1,2,3,4,5,6,7,8,9];
+def sudoku extends standard := {
+  set(A1,A2,A3,A4,A5,A6,A7,A8,A9) <- allDiff(cons(A1,cons(A2, cons(A3, cons(A4, cons(A5,cons(A6,cons(A7,cons(A8,A9))))))))).
+  sudoku(R1,R2,R3,R4,R5,R6,R7,R8,R9,C1,C2,C3,C4,C5,C6,C7,C8,C9) <- 
+    allDiff(R1), allDiff(R2),allDiff(R3),allDiff(R4),allDiff(R5),allDiff(R6),allDiff(R7),allDiff(R8),allDiff(R9).
+};
+sudoku[sudoku(
+  X0 , X1 , X2 , X3 , X4 , X5 , X6 , X7 , X8,
+  X9 , X10, X11, X12, X13, X14, X15, X16, X17
+  X18, X19, X20, X21, X22, X23, X24, X25, X26
+  X27, X28, X29, X30, X31, X32, X33, X34, X35
+  X36, X37, X38, X39, X40, X41, X42, X43, X44
+  X45, X46, X47, X48, X49, X50, X51, X52, X53
+  X54, X55, X56, X57, X58, X59, X60, X61, X62
+  X63, X64, X65, X66, X67, X68, X69, X70, X71
+  X72, X73, X74, X75, X76, X77, X78, X79, X80
+)];
+

@@ -10,7 +10,8 @@
     "preconsole": "npm run build",
     "console": "node terminal.cjs",
     "test:editor": "node --test vscode-csp/tests/analysis.cjs vscode-csp/tests/tokens.cjs vscode-csp/tests/extension.cjs vscode-csp/tests/snippets.cjs",
-    "check": "npm test && npm run test:editor"
+    "check": "npm test && npm run test:editor",
+    "test:graph": "npm run build && node tests/graph.cjs"
   },
   "devDependencies": {
     "typescript": "~5.9.3"

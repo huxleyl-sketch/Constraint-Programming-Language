@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+& node (Join-Path $PSScriptRoot 'sync-operator-lexing.cjs')
+if ($LASTEXITCODE -ne 0) { throw 'Operator lexer synchronization failed.' }
 & node (Join-Path $PSScriptRoot 'sync-tokens.cjs')
 if ($LASTEXITCODE -ne 0) { throw 'Token synchronization failed.' }
 & node (Join-Path $PSScriptRoot 'sync-standard-snippets.cjs')
@@ -45,7 +47,7 @@ try {
   <Assets><Asset Type="Microsoft.VisualStudio.Code.Manifest" Path="extension/package.json" Addressable="true" /></Assets>
 </PackageManifest>
 "@
-    foreach ($relative in @('package.json', 'language-configuration.json', 'README.md', 'syntaxes/csp.tmLanguage.json', 'snippets/csp.json', 'snippets/standard.json', 'extension.js', 'analysis.js', 'tokens.json')) {
+    foreach ($relative in @('package.json', 'language-configuration.json', 'README.md', 'syntaxes/csp.tmLanguage.json', 'snippets/csp.json', 'snippets/standard.json', 'extension.js', 'analysis.js', 'operator-lexing.js', 'tokens.json')) {
         [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, (Join-Path $PSScriptRoot $relative), "extension/$relative") | Out-Null
     }
 } finally {

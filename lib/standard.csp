@@ -1,22 +1,38 @@
 % Reusable decimal arithmetic and finite-list relationships.
-% Decimal: 123 = n(1,n(2,3)); list: cons(a,cons(b,nil)).
+% Decimal: 1 2 3 or n(1,n(2,3)); list: [a | b | []].
 def standard := {
   syntax[
-    opp xfx =/2. 
-    opp yfx +/3.
-    opp 500 yfx */3.
-    opp yfx -/3.
-    opp xfx </2.
-    opp xfx <=/2.
-    opp xfx >/2.
-    opp xfx >=/2.
-    opp xfx numberEqual/2.
-    opp xfx different/2.
-    opp xfx allDiff/2.
+    opp w/o 599 xfy =/2.
+    opp w/o 580 xfy |/2.
+    opp w/o 300 fy 0/1.
+    opp w/o 300 fy 1/1.
+    opp w/o 300 fy 2/1.
+    opp w/o 300 fy 3/1.
+    opp w/o 300 fy 4/1.
+    opp w/o 300 fy 5/1.
+    opp w/o 300 fy 6/1.
+    opp w/o 300 fy 7/1.
+    opp w/o 300 fy 8/1.
+    opp w/o 300 fy 9/1.
+    opp w/o yfx +/2.
+    opp w/o 500 yfx */2.
+    opp w/o yfx -/2.
+    opp w/o xfx </2.
+    opp w/o xfx <=/2.
+    opp w/o xfx >/2.
+    opp w/o xfx >=/2.
+    opp w xfx numberEqual/2.
+    opp w xfx different/2.
+    opp w xfx allDiff/2.
+    opp w/o fx !/1.
   ].
   equal(X,X).
-  =(X,X).
-  different(A,B) <- ~equal(A,B).
+  % Evaluate a ground numeric expression on the right; equal/2 unifies terms.
+  N = A <- fastAdd(A,0,N).
+  N = A + B <- X = A, Y = B, fastAdd(X,Y,N).
+  N = A * B <- X = A, Y = B, fastMult(X,Y,N).
+  N = A - B <- X = A, Y = B, fastSub(X,Y,N).
+  A different B <- ~equal(A,B).
 
   % Ground finite lists; different/allDiff test values, not delayed inequalities.
   member(X,cons(X,_)).
@@ -29,9 +45,18 @@ def standard := {
   notMember(X,L) <- ~member(X,L).
   allDiff(nil).
   allDiff(cons(H,T)) <- notMember(H,T), allDiff(T).
-  allDiff(A,B) <- different(A,B).
+  A allDiff B <- different(A,B).
   allDiff(A,B,C) <- allDiff(cons(A,cons(B,cons(C,nil)))).
   allDiff(A,B,C,D) <- allDiff(cons(A,cons(B,cons(C,cons(D,nil))))).
+
+  member(X,[X|_]).
+  member(X,[_|T]) <- member(X,T).
+  append([H|T],B,[H|R]) <- append(T,B,R).
+  reverseInto([H|T],A,R) <- reverseInto(T,[H|A],R).
+  allDiff([H | T]) <- notMember(H,T), allDiff(T).
+  sum([H | T],N) <- sum(T,S), fastAdd(H,S,N).7
+  product([H | T],N) <- product(T,P), fastMult(H,P,N).
+  length([_ | T],N) <- length(T,L), successor(L,N).
 
   % Digit successor with overflow, internal to arithmetic.
   fastStep(0,1,0). fastStep(1,2,0). fastStep(2,3,0).
@@ -44,6 +69,16 @@ def standard := {
   fastDigit(0). fastDigit(1). fastDigit(2). fastDigit(3). fastDigit(4).
   fastDigit(5). fastDigit(6). fastDigit(7). fastDigit(8). fastDigit(9).
   fastDigits(D,L,ds(D,L)) <- fastDigit(D).
+  fastDigits(0(T),L,R) <- fastDigits(n(0,T),L,R).
+  fastDigits(1(T),L,R) <- fastDigits(n(1,T),L,R).
+  fastDigits(2(T),L,R) <- fastDigits(n(2,T),L,R).
+  fastDigits(3(T),L,R) <- fastDigits(n(3,T),L,R).
+  fastDigits(4(T),L,R) <- fastDigits(n(4,T),L,R).
+  fastDigits(5(T),L,R) <- fastDigits(n(5,T),L,R).
+  fastDigits(6(T),L,R) <- fastDigits(n(6,T),L,R).
+  fastDigits(7(T),L,R) <- fastDigits(n(7,T),L,R).
+  fastDigits(8(T),L,R) <- fastDigits(n(8,T),L,R).
+  fastDigits(9(T),L,R) <- fastDigits(n(9,T),L,R).
   fastDigits(n(H,T),L,R) <- fastDigit(H), fastDigits(T,ds(H,L),R).
 
   % Add at most nine units to one digit, tracking overflow separately.
@@ -105,11 +140,18 @@ def standard := {
   *(A,B,N) <- fastMult(A,B,N).
   -(A,B,N) <- fastSub(A,B,N).
   successor(A,B) <- fastAdd(A,1,B).
-  <=(A,B) <- fastSub(B,A,_).
-  <(A,B) <- fastSub(B,A,D), different(D,0).
-  >(A,B) <- <(B,A).
-  >=(A,B) <- <=(B,A).
-  numberEqual(A,B) <- fastSub(A,B,0).
+  A <= B <- fastSub(B,A,_).
+  A < B <- fastSub(B,A,D), different(D,0).
+  A > B <- <(B,A).
+  A >= B <- <=(B,A).
+  A numberEqual B <- fastSub(A,B,0).
+  add(A,B,N) <- +(A,B,N).
+  mult(A,B,N) <- *(A,B,N).
+  subtract(A,B,N) <- -(A,B,N).
+  less(A,B) <- A < B.
+  lessEqual(A,B) <- A <= B.
+  greater(A,B) <- A > B.
+  greaterEqual(A,B) <- A >= B.
   minimum(A,B,A) <- <=(A,B).
   minimum(A,B,B) <- <(B,A).
   maximum(A,B,B) <- <=(A,B).

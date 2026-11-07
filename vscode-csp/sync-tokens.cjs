@@ -16,7 +16,7 @@ const grammar = JSON.parse(fs.readFileSync(grammarPath, 'utf8'));
 grammar.patterns.find(p => p.name === 'keyword.declaration.csp').match =
     '\\b(?:' + definitions.filter(t => ['VARIABLE', 'DEFINE', 'IMPORT', 'FROM'].includes(t.kind)).map(t => escape(t.source.replace(/\\b$/, ''))).join('|') + ')\\b';
 grammar.patterns.find(p => p.name === 'keyword.operator.csp').match =
-    definitions.filter(t => ['DEF', 'MANY', 'CON', 'QUALIFIED', 'IMPLIES', 'NOT', 'OPERATOR'].includes(t.kind)).map(t => t.source).join('|');
+    definitions.filter(t => ['DEF', 'MANY', 'QUALIFIED', 'IMPLIES', 'NOT'].includes(t.kind)).map(t => t.source).join('|');
 const outputs = [
     [path.join(root, 'tokens.json'), JSON.stringify(definitions, null, 2) + '\n'],
     [grammarPath, JSON.stringify(grammar, null, 2) + '\n']

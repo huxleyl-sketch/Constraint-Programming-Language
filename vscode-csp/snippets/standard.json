@@ -5,8 +5,8 @@
     "description": "Standard library equal/2. Import standard first; inserts a qualified predicate call."
   },
   "Standard =/2": {
-    "prefix": "std-unify",
-    "body": "standard : =(${1:A},${2:B})",
+    "prefix": "std-evaluate",
+    "body": "standard : =(${1:Result},${2:Expression})",
     "description": "Standard library =/2. Import standard first; inserts a qualified predicate call."
   },
   "Standard different/2": {
@@ -54,6 +54,21 @@
     "body": "standard:allDiff(${1:A},${2:B},${3:C},${4:D})",
     "description": "Standard library allDiff/4. Import standard first; inserts a qualified predicate call."
   },
+  "Standard sum/2": {
+    "prefix": "std-sum",
+    "body": "standard:sum(${1:List},${2:Result})",
+    "description": "Standard library sum/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard product/2": {
+    "prefix": "std-product",
+    "body": "standard:product(${1:List},${2:Result})",
+    "description": "Standard library product/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard length/2": {
+    "prefix": "std-length",
+    "body": "standard:length(${1:List},${2:Result})",
+    "description": "Standard library length/2. Import standard first; inserts a qualified predicate call."
+  },
   "Standard fastAdd/3": {
     "prefix": "std-fastAdd",
     "body": "standard:fastAdd(${1:A},${2:B},${3:Result})",
@@ -68,6 +83,51 @@
     "prefix": "std-fastSub",
     "body": "standard:fastSub(${1:A},${2:B},${3:Result})",
     "description": "Standard library fastSub/3. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard +/3": {
+    "prefix": "std-+",
+    "body": "standard:+(${1:A},${2:B},${3:Result})",
+    "description": "Standard library +/3. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard */3": {
+    "prefix": "std-*",
+    "body": "standard:*(${1:A},${2:B},${3:Result})",
+    "description": "Standard library */3. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard -/3": {
+    "prefix": "std--",
+    "body": "standard:-(${1:A},${2:B},${3:Result})",
+    "description": "Standard library -/3. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard successor/2": {
+    "prefix": "std-successor",
+    "body": "standard:successor(${1:A},${2:B})",
+    "description": "Standard library successor/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard <=/2": {
+    "prefix": "std-<=",
+    "body": "standard:<=(${1:A},${2:B})",
+    "description": "Standard library <=/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard </2": {
+    "prefix": "std-<",
+    "body": "standard:<(${1:A},${2:B})",
+    "description": "Standard library </2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard >/2": {
+    "prefix": "std->",
+    "body": "standard:>(${1:A},${2:B})",
+    "description": "Standard library >/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard >=/2": {
+    "prefix": "std->=",
+    "body": "standard:>=(${1:A},${2:B})",
+    "description": "Standard library >=/2. Import standard first; inserts a qualified predicate call."
+  },
+  "Standard numberEqual/2": {
+    "prefix": "std-numberEqual",
+    "body": "standard:numberEqual(${1:A},${2:B})",
+    "description": "Standard library numberEqual/2. Import standard first; inserts a qualified predicate call."
   },
   "Standard add/3": {
     "prefix": "std-add",
@@ -84,20 +144,15 @@
     "body": "standard:subtract(${1:A},${2:B},${3:Result})",
     "description": "Standard library subtract/3. Import standard first; inserts a qualified predicate call."
   },
-  "Standard successor/2": {
-    "prefix": "std-successor",
-    "body": "standard:successor(${1:A},${2:B})",
-    "description": "Standard library successor/2. Import standard first; inserts a qualified predicate call."
+  "Standard less/2": {
+    "prefix": "std-less",
+    "body": "standard:less(${1:A},${2:B})",
+    "description": "Standard library less/2. Import standard first; inserts a qualified predicate call."
   },
   "Standard lessEqual/2": {
     "prefix": "std-lessEqual",
     "body": "standard:lessEqual(${1:A},${2:B})",
     "description": "Standard library lessEqual/2. Import standard first; inserts a qualified predicate call."
-  },
-  "Standard less/2": {
-    "prefix": "std-less",
-    "body": "standard:less(${1:A},${2:B})",
-    "description": "Standard library less/2. Import standard first; inserts a qualified predicate call."
   },
   "Standard greater/2": {
     "prefix": "std-greater",
@@ -109,11 +164,6 @@
     "body": "standard:greaterEqual(${1:A},${2:B})",
     "description": "Standard library greaterEqual/2. Import standard first; inserts a qualified predicate call."
   },
-  "Standard numberEqual/2": {
-    "prefix": "std-numberEqual",
-    "body": "standard:numberEqual(${1:A},${2:B})",
-    "description": "Standard library numberEqual/2. Import standard first; inserts a qualified predicate call."
-  },
   "Standard minimum/3": {
     "prefix": "std-minimum",
     "body": "standard:minimum(${1:A},${2:B},${3:Result})",
@@ -124,21 +174,6 @@
     "body": "standard:maximum(${1:A},${2:B},${3:Result})",
     "description": "Standard library maximum/3. Import standard first; inserts a qualified predicate call."
   },
-  "Standard sum/2": {
-    "prefix": "std-sum",
-    "body": "standard:sum(${1:List},${2:Result})",
-    "description": "Standard library sum/2. Import standard first; inserts a qualified predicate call."
-  },
-  "Standard product/2": {
-    "prefix": "std-product",
-    "body": "standard:product(${1:List},${2:Result})",
-    "description": "Standard library product/2. Import standard first; inserts a qualified predicate call."
-  },
-  "Standard length/2": {
-    "prefix": "std-length",
-    "body": "standard:length(${1:List},${2:Result})",
-    "description": "Standard library length/2. Import standard first; inserts a qualified predicate call."
-  },
   "Import standard library": {
     "prefix": "std-import",
     "body": "import standard from (${1:../lib/standard.csp});",
@@ -148,15 +183,15 @@
     "prefix": "std-system",
     "body": [
       "def ${1:arithmetic} extends standard := {",
-      "\t${2:total}(A,B,N) <- N = A add B.",
+      "\t${2:total}(A,B,N) <- +(A,B,N).",
       "\t$0",
       "};"
     ],
-    "description": "Define a child of standard with inherited arithmetic syntax. Import standard first."
+    "description": "Define a child of standard with explicit arithmetic calls. Import standard first."
   },
   "Standard arithmetic constraint": {
     "prefix": "std-calculate",
-    "body": "standard[${1:Result} = ${2:A} ${3|add,mult,subtract|} ${4:B}];",
+    "body": "standard[${1|+,*,-|}(${2:A},${3:B},${4:Result})];",
     "description": "Arithmetic CSP constraint on declared variables with decimal domains. Import standard first."
   },
   "Standard all-different constraint": {
@@ -166,12 +201,12 @@
   },
   "Standard list term": {
     "prefix": "std-list",
-    "body": "cons(${1:A},cons(${2:B},cons(${3:C},nil)))",
-    "description": "Three-element finite list using standard library cons/nil representation."
+    "body": "[${1:A} | ${2:B} | ${3:C} | []]",
+    "description": "Three-element finite list using inherited standard list syntax."
   },
   "Standard decimal term": {
     "prefix": "std-decimal",
-    "body": "n(${1:1},n(${2:2},${3:3}))",
+    "body": "${1:1} ${2:2} ${3:3}",
     "description": "Three-digit nonnegative decimal (default: 123)."
   }
 }

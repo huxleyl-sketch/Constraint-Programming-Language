@@ -1,11 +1,11 @@
 type TokenDefinition = { kind: string; regex: RegExp; type: string; pre: number };
 type tokenTemp = TokenDefinition & { kind: TokenKind };
-type token = tokenTemp & { lexeme: string };
+type token = tokenTemp & { lexeme: string; start?: number; end?: number; literal?: boolean };
 
 const Tokens = [
 
-    { kind: "VARIABLE", regex: /let/y, type: "fx", pre: 1800 },
-    { kind: "DEFINE", regex: /def/y, type: "fx", pre: 1800 },
+    { kind: "VARIABLE", regex: /let\b/y, type: "fx", pre: 1800 },
+    { kind: "DEFINE", regex: /def\b/y, type: "fx", pre: 1800 },
     { kind: "IMPORT", regex: /import\b/y, type: "fx", pre: 1800 },
     { kind: "FROM", regex: /from\b/y, type: "xfx", pre: 1500 },
     { kind: "IMPORT_PATH", regex: /\([^()\r\n]*\)/y, type: "x", pre: 0 },
@@ -21,7 +21,6 @@ const Tokens = [
 
 
 
-    { kind: "CON", regex: /\|/y, type: "xfx", pre: 1200 },
     { kind: "QUALIFIED", regex: /:/y, type: "xfx", pre: 600 },
 
     { kind: "QUERY", regex: /\[/y, type: "xfo", pre: 1199 },
@@ -34,9 +33,7 @@ const Tokens = [
     { kind: "IMPLIES", regex: /<-/y, type: "xfx", pre: 800 },
 
     { kind: "NOT", regex: /~/y, type: "fx", pre: 200 },
-    { kind: "OPERATOR", regex: /[=<>!+*\/&?\-]+/y, type: "x", pre: 0 },
-
-    { kind: "ATOM", regex: /[a-z0-9]\w*/y, type: "x", pre: 0 },
+    { kind: "ATOM", regex: /(?:[a-z0-9]\w*|[=<>!+*\/&?|\-$@#\\'"`]+)/y, type: "x", pre: 0 },
     { kind: "VAR", regex: /[A-Z]\w*/y, type: "x", pre: 0 },
     { kind: "ANY", regex: /\_/y, type: "x", pre: 0 },
 
@@ -75,7 +72,7 @@ class Expr {
     }
 }
 
-type SyntaxOperator = { name: string; arity: 2 | 3; associativity: 'yfx' | 'xfy' | 'xfx'; precedence: number; system?: string; ambiguous?: boolean };
+type SyntaxOperator = { name: string; arity: 1 | 2; associativity: 'yfx' | 'xfy' | 'xfx' | 'fx' | 'fy' | 'xf' | 'yf'; precedence: number; spacing?: 'w' | 'w/o'; system?: string; ambiguous?: boolean };
 type SyntaxOperators = Map<string, SyntaxOperator>;
 type SyntaxEnvironment = {
     systems: Map<string, SyntaxOperators>;
@@ -84,6 +81,56 @@ type SyntaxEnvironment = {
     scope?: string;
     loadImport?: (name: string, path: string) => SyntaxOperators;
 };
+
+
+// BEGIN SHARED OPERATOR LEXING
+// Transpiled for the editor by sync-operator-lexing.cjs.
+type OperatorPiece = { value: string; kind: string; start: number; end: number; literal?: boolean };
+function* joinedTokenizations(
+    input: readonly OperatorPiece[],
+    operators: ReadonlyMap<string, { spacing?: 'w' | 'w/o' }>
+): Generator<OperatorPiece[]> {
+    const joined = [...operators].filter(([,spec]) => spec.spacing === 'w/o')
+        .map(([name]) => name).sort((a,b) => b.length - a.length);
+    const boundary = (left: OperatorPiece | undefined, right: OperatorPiece | undefined) =>
+        !left || !right || left.end !== right.start || /^[()[\]{},.;:~]$/.test(left.value) || /^[()[\]{},.;:~]$/.test(right.value);
+    const mark = (piece: OperatorPiece, before?: OperatorPiece, after?: OperatorPiece): OperatorPiece =>
+        operators.get(piece.value)?.spacing === 'w' && (!boundary(before,piece) || !boundary(piece,after))
+            ? { ...piece, literal: true } : piece;
+    function* split(value: string, offset: number): Generator<OperatorPiece[]> {
+        if (!value) { yield []; return; }
+        const names = joined.filter(name => value.startsWith(name));
+        for (const name of names) {
+            for (const tail of split(value.slice(name.length),offset + name.length))
+                yield [{ value: name, kind: 'ATOM', start: offset, end: offset + name.length }, ...tail];
+        }
+        if (names.length) return;
+        let end = 1;
+        while (end < value.length && !joined.some(name => value.startsWith(name,end))) end++;
+        const head = value.slice(0,end);
+        for (const tail of split(value.slice(end),offset + end))
+            yield [{ value: head, kind: /^[A-Z]/.test(head) ? 'VAR' : head === '_' ? 'ANY' : 'ATOM', start: offset, end: offset + end }, ...tail];
+    }
+    function* walk(index: number): Generator<OperatorPiece[]> {
+        if (index >= input.length) { yield []; return; }
+        const first = input[index]!;
+        let end = index + 1;
+        // Variables and explicit functor names retain their identities.
+        if (first.kind === 'ATOM' && input[end]?.value !== '(') {
+            while (input[end]?.kind === 'ATOM' && input[end - 1]!.end === input[end]!.start) end++;
+        }
+        const group = input.slice(index,end);
+        const text = group.map(t => t.value).join('');
+        const variants = first.kind === 'ATOM' && input[index + 1]?.value !== '(' && joined.some(name => text.includes(name))
+            ? split(text,first.start) : [group];
+        for (const variant of variants) {
+            const marked = variant.map((piece,n) => mark(piece,variant[n - 1] ?? input[index - 1],variant[n + 1] ?? input[end]));
+            for (const rest of walk(end)) yield [...marked,...rest];
+        }
+    }
+    yield* walk(0);
+}
+// END SHARED OPERATOR LEXING
 
 function interpreter(code: string, syntax: SyntaxOperators = new Map(), environment?: SyntaxEnvironment): Array<Expr> {
 
@@ -106,29 +153,27 @@ function interpreter(code: string, syntax: SyntaxOperators = new Map(), environm
     // Skip trivia while scanning, so import paths remain unchanged.
 
     function tokenise(code: string, expectPath = false): token[] {
-        //if there is no more code end recurrsion
-        if (!code) return [];
-        //skip spaces
-        const trivia = /^(?:\s+|%[^\r\n]*)/.exec(code);
-        if (trivia) return tokenise(code.slice(trivia[0].length), expectPath);
-        for (let token of Tokens) {
-            if (token.kind === 'IMPORT_PATH' && !expectPath) continue;
-            //copy regex
-            let regex = new RegExp(token.regex);
-            //set last index
-            regex.lastIndex = 0;
-            //find the match
-            const match = regex.exec(code)
-            //if the match doesn't exist test next token
-            if (!match) continue;
-            //tokenise the rest of the code
-            let tokens = tokenise(code.slice(match[0].length), token.kind === 'FROM')
-            //return the list of tokens with the new token at the head
-            return [{ lexeme: match[0], ...token }, ...tokens];
-
+        const result: token[] = [];
+        let offset = 0;
+        while (offset < code.length) {
+            const remaining = code.slice(offset);
+            const trivia = /^(?:\s+|%[^\r\n]*)/.exec(remaining);
+            if (trivia) { offset += trivia[0].length; continue; }
+            let found = false;
+            for (const definition of Tokens) {
+                if (definition.kind === 'IMPORT_PATH' && !expectPath) continue;
+                const regex = new RegExp(definition.regex);
+                const match = regex.exec(remaining);
+                if (!match) continue;
+                result.push({ ...definition, lexeme: match[0], start: offset, end: offset + match[0].length });
+                offset += match[0].length;
+                expectPath = definition.kind === 'FROM';
+                found = true;
+                break;
+            }
+            if (!found) throw new Error(`Unexpected Token: ${code[offset]}`);
         }
-        //throw error when there are no token matches
-        throw new Error(`Unexpected Token: ${code[0]}`)
+        return result;
     }
 
     function ASTBuild(tokens: token[]): Expr[] {
@@ -231,13 +276,8 @@ function interpreter(code: string, syntax: SyntaxOperators = new Map(), environm
     const hasSyntax = operators.size || originalTokens.some(t => t.lexeme === 'extends') || [...(environment?.systems.values() ?? [])].some(ops => ops.size) ||
         originalTokens.some((t,i) => t.lexeme === 'syntax' && originalTokens[i + 1]?.lexeme === '[');
     const expandedTokens = hasSyntax
-        ? tokenise(new SyntaxExpander(originalTokens, operators,environment).expand()) : originalTokens;
-    let tokenised = expandedTokens.map((token, index, tokens): token =>
-        token.kind === 'OPERATOR' && tokens[index + 1]?.lexeme === '(' &&
-            (index === 0 || tokens[index - 1]?.lexeme === '(' || ['COMMA', 'IMPLIES', 'RELATION', 'CLAUSE', 'LINE', 'NOT', 'QUALIFIED', 'QUERY'].includes(resolve(tokens[index - 1]).kind))
-            ? { ...token, kind: 'ATOM', type: 'x', pre: 0 } : token);
-    const undeclared = tokenised.find(token => token.kind === 'OPERATOR');
-    if (undeclared) throw new Error(`Undeclared syntax operator '${undeclared.lexeme}'; declare it with syntax[...] or use a predicate call`);
+        ? tokenise(new SyntaxExpander(originalTokens, operators,tokenise,environment).expand()) : originalTokens;
+    const tokenised = expandedTokens;
     if (debug) console.log(tokenised)
     let ASTTree = ASTBuild(tokenised);
     let fASTTree = removeComma(ASTTree);
@@ -247,7 +287,7 @@ function interpreter(code: string, syntax: SyntaxOperators = new Map(), environm
     return fASTTree;
 }
 
-type SyntaxTerm = { text: string; args?: SyntaxTerm[]; operator?: SyntaxOperator; qualifier?: string };
+type SyntaxTerm = { text: string; args?: SyntaxTerm[]; operator?: SyntaxOperator; qualifier?: string; priority?: number };
 
 /** Source sugar only: expansion produces ordinary predicate calls before ASTBuild. */
 class SyntaxExpander {
@@ -256,7 +296,7 @@ class SyntaxExpander {
     private operators: SyntaxOperators;
     private scope: string | undefined;
     private readonly environment: SyntaxEnvironment;
-    constructor(private readonly tokens: readonly token[], private readonly globals: SyntaxOperators, environment?: SyntaxEnvironment) {
+    constructor(private readonly tokens: readonly token[], private readonly globals: SyntaxOperators, private readonly tokenise: (code: string) => token[], environment?: SyntaxEnvironment) {
         this.used = new Set(tokens.map(t => t.lexeme));
         this.environment = environment ?? { systems: new Map(), imported: new Set() };
         this.operators = globals;
@@ -330,25 +370,32 @@ class SyntaxExpander {
             if (depth === 0 && t.lexeme === 'syntax' && tokens[i + 1]?.lexeme === '[') {
                 const end = this.close(tokens, i + 1);
                 const declaration = tokens.slice(i + 2, end).flatMap(t =>
-                    t.kind === 'OPERATOR' && t.lexeme.length > 1 && t.lexeme.endsWith('/')
+                    t.kind === 'ATOM' && t.lexeme.length > 1 && t.lexeme.endsWith('/')
                         ? [{ ...t,lexeme:t.lexeme.slice(0,-1) },{ ...t,lexeme:'/' }] : [t]);
                 const target = owner ? resolve(this.environment.systems.get(owner)) : this.globals;
                 let p = 0;
                 while (p < declaration.length) {
                     if (declaration[p++]?.lexeme !== 'opp') throw new Error('Expected opp in syntax declaration');
+                    let spacing: 'w' | 'w/o' | undefined;
+                    if (declaration[p]?.lexeme === 'w') {
+                        p++;
+                        spacing = 'w';
+                        if (declaration[p]?.lexeme === '/' && declaration[p + 1]?.lexeme === 'o') { p += 2; spacing = 'w/o'; }
+                    }
                     let precedence: number | undefined;
                     if (/^\d+$/.test(declaration[p]?.lexeme ?? '')) precedence = Number(declaration[p++]?.lexeme);
                     const associativity = declaration[p++]?.lexeme;
                     const name = declaration[p++]?.lexeme;
-                    if (!['yfx', 'xfy', 'xfx'].includes(associativity ?? '') || !name ||
-                        !/^(?:[a-z]\w*|[=<>!+*\/&?\-]+)$/.test(name) || ['let','def','import','from','syntax','opp'].includes(name) ||
-                        declaration[p++]?.lexeme !== '/') throw new Error('Expected opp [priority] yfx|xfy|xfx name/2|3.');
+                    if (!['yfx', 'xfy', 'xfx', 'fx', 'fy', 'xf', 'yf'].includes(associativity ?? '') || !name ||
+                        !/^(?:[a-z]\w*|[0-9]|[=<>!+*\/&?|\-$@#\\'"`]+)$/.test(name) || ['let','def','import','from','syntax','opp'].includes(name) ||
+                        declaration[p++]?.lexeme !== '/') throw new Error('Expected opp [priority] yfx|xfy|xfx name/2 or fx|fy|xf|yf name/1.');
                     const arity = Number(declaration[p++]?.lexeme);
-                    precedence ??= arity === 2 ? 599 : 550;
-                    if ((arity !== 2 && arity !== 3) || declaration[p++]?.lexeme !== '.' || precedence < 1 || precedence > 599)
-                        throw new Error('Syntax operators require arity 2 or 3 and priority 1 through 599');
+                    precedence ??= 550;
+                    if (arity !== (associativity?.length === 2 ? 1 : 2) || declaration[p++]?.lexeme !== '.' || precedence < 1 || precedence > 599)
+                        throw new Error('Syntax operators require arity 1 for fx|fy|xf|yf, arity 2 for xfx|xfy|yfx, and priority 1 through 599');
                     if (target.has(name)) throw new Error(`Duplicate syntax operator: ${name}`);
-                    const spec: SyntaxOperator = { name, arity, precedence, associativity: associativity as SyntaxOperator['associativity'] };
+                    const spec: SyntaxOperator = { name, arity: arity as 1 | 2, precedence, associativity: associativity as SyntaxOperator['associativity'] };
+                    if (spacing) spec.spacing = spacing;
                     if (owner) spec.system = owner;
                     target.set(name,spec);
                 }
@@ -400,7 +447,7 @@ class SyntaxExpander {
                 let start = open + 1;
                 let j = start;
                 while (j < end) {
-                    if (['(', '['].includes(body[j]?.lexeme ?? '')) { j = this.close(body,j) + 1; continue; }
+                    if (['(', '[', '{'].includes(body[j]?.lexeme ?? '')) { j = this.close(body,j) + 1; continue; }
                     if (body[j]?.lexeme === '.') {
                         output.push(this.clause(body.slice(start,j)) + '.');
                         start = j + 1;
@@ -416,12 +463,11 @@ class SyntaxExpander {
                 const start = i;
                 while (i < body.length && body[i]?.lexeme !== ';') i++;
                 if (current.lexeme === 'let') {
-                    for (let p = start; p < i; p++) {
-                        if (this.operators.has(body[p]?.lexeme ?? '') &&
-                            !['[','(',','].includes(body[p - 1]?.lexeme ?? '') &&
-                            ![']',')',',','('].includes(body[p + 1]?.lexeme ?? ''))
-                            throw new Error('Result expressions belong in predicate goals, not domain declarations');
-                    }
+                    const open = body.findIndex((t,p) => p >= start && p < i && t.lexeme === '[');
+                    const end = this.close(body,open);
+                    const terms = this.goals([...this.tokenise('syntaxDomain('),...body.slice(open + 1,end),...this.tokenise(')')])[0];
+                    output.push(this.text(body.slice(start,open + 1)),resolve(terms).slice('syntaxDomain('.length,-1),']');
+                    continue;
                 }
                 output.push(this.text(body.slice(start,i)));
             } else if (body[i + 1]?.lexeme === '[') {
@@ -449,19 +495,38 @@ class SyntaxExpander {
         const implies = tokens.findIndex(t => t.lexeme === '<-');
         const head = implies < 0 ? tokens : tokens.slice(0,implies);
         const heads = this.goals(head);
-        if (heads.length !== 1) throw new Error('Nested result expressions belong in rule bodies, not clause heads');
+        if (heads.length !== 1) throw new Error('Expected a single predicate clause head');
         if (implies < 0) return resolve(heads[0]);
         return `${heads[0]} <- ${this.goals(tokens.slice(implies + 1)).join(',')}`;
     }
 
     private query(tokens: readonly token[]): string {
         const goals = this.goals(tokens);
-        if (goals.length === 1 && !/^(?:~|[a-z]\w*\s*:)/.test(resolve(goals[0]))) return resolve(goals[0]);
+        if (goals.length === 1 && !/^(?:~|[a-z]\w*\s*:)/.test(resolve(goals[0])) && (resolve(goals[0]).match(/\(/g)?.length ?? 0) === 1) return resolve(goals[0]);
         const variables = [...new Set(tokens.filter(t => t.kind === 'VAR').map(t => t.lexeme))];
         return `${this.fresh('syntaxExpression')}(${variables.join(',')}) <- ${goals.join(',')}`;
     }
 
     private goals(tokens: readonly token[]): string[] {
+        const specs = new Map(this.operators);
+        // Qualified calls may select syntax which is not imported globally.
+        for (let i = 0; i < tokens.length - 1; i++) if (tokens[i + 1]?.lexeme === ':')
+            for (const [name,spec] of this.inScope(tokens[i]?.lexeme)) specs.set(name,spec);
+        let firstError: unknown;
+        for (const pieces of joinedTokenizations(tokens.map((t,i) => ({
+            value: t.lexeme, kind: t.kind, start: t.start ?? -i * 2 - 2, end: t.end ?? -i * 2 - 1
+        })), specs)) {
+            const expanded = pieces.map(piece => ({
+                ...resolve(Tokens.find(t => t.kind === piece.kind)), lexeme: piece.value,
+                start: piece.start, end: piece.end, literal: piece.literal ?? false
+            }));
+            try { return this.parseGoals(expanded); }
+            catch (error) { firstError ??= error; }
+        }
+        throw firstError ?? new Error('Expected a predicate goal');
+    }
+
+    private parseGoals(tokens: readonly token[]): string[] {
         let position = 0;
         const at = () => tokens[position]?.lexeme;
         const consume = (value: string) => {
@@ -469,18 +534,40 @@ class SyntaxExpander {
             position++;
         };
         const primary = (): SyntaxTerm => {
-            if (at() === '(') {
+            const opening = at();
+            if (opening === '(' || opening === '[' || opening === '{') {
                 position++;
+                // Empty brackets denote the finite-list terminator only in list syntax scopes.
+                if (opening === '[' && at() === ']' && this.operators.has('|')) {
+                    position++;
+                    return { text: 'nil' };
+                }
                 const result = expression(0);
-                consume(')');
-                return result;
+                consume(opening === '(' ? ')' : opening === '[' ? ']' : '}');
+                return { ...result, priority: 0 };
+            }
+            const prefix = tokens[position]?.literal ? undefined : this.operators.get(at() ?? '');
+            const following = this.operators.get(tokens[position + 1]?.lexeme ?? '');
+            if (prefix && ['fx','fy'].includes(prefix.associativity) &&
+                (!following || ['fx','fy'].includes(following.associativity)) &&
+                (['ATOM','VAR','ANY'].includes(tokens[position + 1]?.kind ?? '') || ['[','{'].includes(tokens[position + 1]?.lexeme ?? ''))) {
+                if (prefix.ambiguous) throw new Error(`Ambiguous syntax operator '${prefix.name}'; qualify the predicate system`);
+                position++;
+                const operand = expression(600 - prefix.precedence + (prefix.associativity === 'fx' ? 1 : 0));
+                if ((operand.priority ?? 0) > prefix.precedence || (prefix.associativity === 'fx' && operand.priority === prefix.precedence))
+                    throw new Error(`Operator '${prefix.name}' requires parentheses at equal or weaker precedence`);
+                return { text: prefix.name, operator: prefix, args: [operand], priority: prefix.precedence };
             }
             const t = tokens[position++];
-            if (!t || !['ATOM','VAR','ANY','OPERATOR'].includes(t.kind)) throw new Error('Expected an operand in syntax expression');
+            if (!t || !['ATOM','VAR','ANY'].includes(t.kind)) throw new Error('Expected an operand in syntax expression');
             const result: SyntaxTerm = { text: t.lexeme };
             if (at() === ':') {
                 position++;
-                const qualified = primary();
+                const previousOperators = this.operators;
+                this.operators = this.inScope(t.lexeme);
+                let qualified: SyntaxTerm;
+                try { qualified = primary(); }
+                finally { this.operators = previousOperators; }
                 qualified.qualifier = t.lexeme;
                 return qualified;
             }
@@ -489,6 +576,8 @@ class SyntaxExpander {
                 result.args = [];
                 while (at() !== ')') {
                     result.args.push(expression(0));
+                    if (at() !== ',' && at() !== ')' && tokens[position - 1]?.end === tokens[position]?.start)
+                        throw new Error('Adjacent arguments need a comma or whitespace');
                     if (at() === ',') { position++; if (at() === ')') throw new Error('Expected argument after comma'); }
                     if (position >= tokens.length) throw new Error("Missing closing ')' in syntax expression");
                 }
@@ -498,26 +587,30 @@ class SyntaxExpander {
         };
         const expression = (minimum: number): SyntaxTerm => {
             let left = primary();
-            let previous: SyntaxOperator | undefined;
             while (position < tokens.length) {
                 const t = resolve(tokens[position]);
-                const spec = (left.qualifier ? this.environment.systems.get(left.qualifier)?.get(t.lexeme) : undefined)
+                const spec = t.literal ? undefined : (left.qualifier ? this.environment.systems.get(left.qualifier)?.get(t.lexeme) : undefined)
                     ?? this.operators.get(t.lexeme);
-                if (!spec) break;
+                if (!spec || ['fx','fy'].includes(spec.associativity)) break;
                 if (spec.ambiguous) throw new Error(`Ambiguous syntax operator '${spec.name}'; qualify the predicate system`);
                 const strength = 600 - spec.precedence;
                 if (strength < minimum) break;
-                if (previous?.precedence === spec.precedence &&
-                    (previous.associativity === 'xfx' || spec.associativity !== 'yfx'))
-                    throw new Error(`Operator '${spec.name}' requires parentheses at equal precedence`);
+                const leftPriority = left.priority ?? 0;
+                if (leftPriority > spec.precedence || (leftPriority === spec.precedence && spec.associativity.startsWith('x')))
+                    throw new Error(`Operator '${spec.name}' requires parentheses at equal or weaker precedence`);
                 position++;
-                const right = expression(strength + (spec.associativity === 'xfy' ? 0 : 1));
                 const qualifier = left.qualifier;
                 const operand = { ...left };
                 delete operand.qualifier;
-                left = { text: spec.name, operator: spec, args: [operand,right] };
+                const args = [operand];
+                if (spec.arity === 2) {
+                    const right = expression(strength + (spec.associativity.endsWith('y') ? 0 : 1));
+                    if ((right.priority ?? 0) > spec.precedence || (right.priority === spec.precedence && spec.associativity.endsWith('x')))
+                        throw new Error(`Operator '${spec.name}' requires parentheses at equal or weaker precedence`);
+                    args.push(right);
+                }
+                left = { text: spec.name, operator: spec, args, priority: spec.precedence };
                 if (qualifier) left.qualifier = qualifier;
-                previous = spec;
             }
             return left;
         };
@@ -525,15 +618,9 @@ class SyntaxExpander {
             const owner = node.qualifier ?? (node.operator?.system !== this.scope ? node.operator?.system : undefined);
             return `${owner ? owner + ' : ' : ''}${node.text}(${args.join(',')})`;
         };
-        const lower = (node: SyntaxTerm, dependencies: string[]): string => {
-            if (node.operator) {
-                if (node.operator.arity !== 3) throw new Error(`Binary relation '${node.text}' cannot be used as a value`);
-                const args = resolve(node.args).map(arg => lower(arg,dependencies));
-                const result = this.fresh('SyntaxValue');
-                dependencies.push(call(node,[...args,result]));
-                return result;
-            }
-            if (node.args) return call(node,node.args.map(arg => lower(arg,dependencies)));
+        // Nested operators construct ordinary compound terms; only the outer goal is called.
+        const lower = (node: SyntaxTerm): string => {
+            if (node.args) return `${node.text}(${node.args.map(lower).join(',')})`;
             return node.text;
         };
         const result: string[] = [];
@@ -541,13 +628,10 @@ class SyntaxExpander {
             const negated = at() === '~';
             if (negated) position++;
             const node = expression(0);
-            const dependencies: string[] = [];
             if (at() === ':=') throw new Error(':= is only for declarations; use a relation such as C = A op B in predicate code');
-            if (node.operator?.arity === 3) throw new Error(`Operation '${node.text}' needs a result relation: C = A ${node.text} B`);
             if (!node.args) throw new Error('Expected a predicate call or declared infix relation');
-            const args = node.args.map(arg => lower(arg,dependencies));
-            if (negated && dependencies.length) throw new Error('Nested result expressions under negation require a wrapper predicate');
-            result.push(...dependencies,(negated ? '~' : '') + call(node,args));
+            const args = node.args.map(lower);
+            result.push((negated ? '~' : '') + call(node,args));
             if (at() === ',') { position++; if (position === tokens.length) throw new Error('Expected goal after comma'); }
         }
         if (!result.length) throw new Error('Expected a predicate goal');

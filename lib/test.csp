@@ -1,0 +1,10 @@
+def test := {
+  syntax[
+    opp 599 xfy =/2.
+    opp 400 xfy +/2.
+  ].
+  A = A.
+  2(A) = A + A.
+    
+
+};

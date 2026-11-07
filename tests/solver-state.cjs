@@ -28,7 +28,7 @@ vm.runInContext(`
     }
     const cross = new constraintSystem(Dfs);
     const symbolic = new constraintSystem(Dfs);
-    parser('def symbols := { syntax[opp xfx =/2.]. =(X,X). equal(A,B) <- A = B. ' +
+    parser('def symbols := { syntax[opp 599 xfx =/2.]. =(X,X). equal(A,B) <- A = B. ' +
         'different(A,B) <- ~A = B. ' +
         '>(s(X),X). chosen(X) <- value(X), X = b. value(a). value(b). }; ' +
         'def use := { same(A,B) <- symbols:A = B. };', symbolic);
@@ -43,13 +43,13 @@ vm.runInContext(`
     assert.equal(symbolicConsole.execute('?- symbols:=(s(a),X).'), 'X = s(a).');
     for (const solver of [Dfs, MAC]) {
         const problem = new constraintSystem(solver);
-        parser('let X := [a,b]; let Y := [b]; def logic := { syntax[opp xfx =/2.]. =(V,V). }; logic[X = Y];', problem);
+        parser('let X := [a,b]; let Y := [b]; def logic := { syntax[opp 599 xfx =/2.]. =(V,V). }; logic[X = Y];', problem);
         assert.equal(problem.returnAssignment(), 'X => b' + '\\n- Y => b');
     }
-    assert.throws(() => interpreter('A = B'), /Undeclared syntax operator/);
+    assert.deepEqual(interpreter('A = B').map(e => e.kind), interpreter('A same B').map(e => e.kind));
     assert.equal(interpreter('=(A,B)')[0].lhs[0].match, '=');
-    assert.throws(() => interpreter('A = B = C'), /Undeclared syntax operator/);
-    assert.throws(() => interpreter('A ='), /Undeclared syntax operator/);
+    assert.deepEqual(interpreter('A = B = C').map(e => e.kind), interpreter('A same B same C').map(e => e.kind));
+    assert.deepEqual(interpreter('A =').map(e => e.kind), interpreter('A same').map(e => e.kind));
     parser("def system := { p(X) <- test:value(X), keep(X). keep(b). " +
         "no(X) <- test:value(X), ~test:blocked(X). " +
         "pair(X,Y) <- test:value(X), test:value(Y). }; " +

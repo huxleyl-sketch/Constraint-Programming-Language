@@ -3,9 +3,9 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const root = path.join(__dirname, '..');
-const context = vm.createContext({ console, structuredClone, logToConsole() {} });
+const context = vm.createContext({ assert, console, structuredClone, logToConsole() {} });
 for (const file of ['src/tokeniser', 'src/parser', 'src/predicateSolverExpr', 'src/constraintSystem',
-    'src/algorithms/dfs', 'src/algorithms/AC-3', 'src/algorithms/MAC', 'src/main']) {
+    'src/prologConsole', 'src/algorithms/dfs', 'src/algorithms/AC-3', 'src/algorithms/MAC', 'src/main']) {
     vm.runInContext(fs.readFileSync(path.join(root, 'dist', file + '.js'), 'utf8'), context);
 }
 context.source = fs.readFileSync(path.join(root, 'lib/standard.csp'), 'utf8');
@@ -85,3 +85,42 @@ vm.runInContext(`for (const solver of [Dfs,MAC]) {
         throw new Error('allDiff constraint failed: ' + assignment);
 }`,context,{timeout:5000});
 console.log('Passed subtraction, comparisons, list relationships and DFS/MAC allDiff constraints.');
+
+vm.runInContext(`
+    const session = new PrologConsole(system);
+    for (const [query, expected] of [
+        ['equal(R,11)', 'R = 1(1).'],
+        ['equal(R,100)', 'R = 1(0(0)).'],
+        ['R=19+1', 'R = n(2, 0).'],
+        ['equal(R,1 9)', 'R = 1(9).'],
+        ['equal(R,1 2 3)', 'R = 1(2(3)).'],
+        ['equal(R,[])', 'R = nil.'],
+        ['equal(R,[a | b | []])', 'R = |(a, |(b, nil)).'],
+        ['equal(R,[[a | []] | []])', 'R = |(|(a, nil), nil).'],
+        ['member(X,[a | b | []])', 'X = a.'],
+        ['length([a | b | []],N)', 'N = 2.'],
+        ['reverse([a | b | []],R)', 'R = |(b, |(a, nil)).'],
+        ['append([a | []],[b | []],R)', 'R = |(a, |(b, nil)).'],
+        ['allDiff([a | a | []])', 'false.'],
+        ['allDiff([a | b | []])', 'true.'],
+        ['sum([9 | 2 | []],N)', 'N = n(1, 1).'],
+        ['fastAdd(1 9,1,N)', 'N = n(2, 0).'],
+        ['fastMult(1 2,3,N)', 'N = n(3, 6).'],
+        ['fastSub(2 0,1,N)', 'N = n(1, 9).'],
+        ['equal(R,1 + 2 * 3)', 'R = +(1, *(2, 3)).'],
+        ['R = 1 + 2 * 3', 'R = 7.'],
+        ['R = (1 + 2) * 3', 'R = 9.'],
+        ['R = 1 9 + 1', 'R = n(2, 0).'],
+        ['R = 9 - 2 - 3', 'R = 4.'],
+        ['R = 2 - 3', 'false.'],
+        ['R = a', 'false.'],
+        ['R = 0 1', 'R = 1.'],
+        ['5 = 2 + 3', 'true.'],
+        ['4 = 2 + 3', 'false.']
+    ]) {
+        try { assert.equal(session.execute('?- standard:' + query + '.'), expected, query); }
+        catch (error) { throw new Error(query + ': ' + error.message); }
+    }
+`, context, {timeout: 5000});
+assert.deepEqual(answers('=', 'N,+(2,3)'), ['5,+(2,3)']);
+console.log('Passed arithmetic expression evaluation, cons notation, nested brackets, numeric prefixes, and symbolic terms.');

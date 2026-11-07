@@ -12,15 +12,15 @@
     "prefix": "syntax",
     "body": [
       "syntax[",
-      "\topp ${1|yfx,xfy,xfx|} ${2:add}/${3|3,2|}.",
+      "\topp w ${1|yfx,xfy,xfx|} ${2:pair}/2.",
       "]."
     ],
     "description": "Declare exported infix syntax inside a predicate system"
   },
-  "Result operation": {
+  "Compound expression": {
     "prefix": "operation",
-    "body": "${1:C} = ${2:A} ${3:add} ${4:B}",
-    "description": "Relate a result to a declared /3 operation using equality"
+    "body": "${1:C} = ${2:A} ${3:pair} ${4:B}",
+    "description": "Unify a variable with a compound term using declared infix syntax"
   },
   "Import system": {
     "prefix": "import",
@@ -80,5 +80,14 @@
     "prefix": "querybracket",
     "body": "${1:system}[${2:parent}(${3:X1},${4:X2})];",
     "description": "Add a constraint using bracket syntax"
+  },
+  "Unary syntax declaration": {
+    "prefix": "syntax-unary",
+    "body": [
+      "syntax[",
+      "\topp w ${1|fx,fy,xf,yf|} ${2:double}/1.",
+      "]."
+    ],
+    "description": "Declare a unary prefix or suffix operator"
   }
 }

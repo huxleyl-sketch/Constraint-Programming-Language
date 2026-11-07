@@ -10,7 +10,7 @@ Highlights this repository's `.csp` files using standard theme scopes:
 
 Also provides bracket matching, bracket auto-closing, and comment toggling
 with VS Code's **Toggle Line Comment** command (Ctrl+/ on Windows).
-Atoms, including numbers, use the theme's string color (typically orange).
+Atoms, including numbers, use the default text colour.
 Predicate and system names retain their own scopes. Exact colors depend on your theme.
 
 ## Try it
@@ -27,7 +27,7 @@ From the repository root, run these commands in PowerShell:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\vscode-csp\package-extension.ps1
-code --install-extension .\vscode-csp\constraint-programming-language-highlighting-0.3.3.vsix --force
+code --install-extension .\vscode-csp\constraint-programming-language-highlighting-0.3.14.vsix --force
 ```
 
 Alternatively, run **Extensions: Install from VSIX...** in VS Code and select
@@ -90,14 +90,14 @@ Rule bodies support qualified calls such as `test:greater(X,Y)` and
 `~test:blocked(X)`. Symbolic predicates such as `=(X,X).` can be called using
 `=(A,B)` directly; `A = B` requires a `syntax[opp xfx =/2.].` declaration.
 Their meaning comes from their definitions, and declarations control infix priority and association.
-Named infix syntax is declared with `syntax[opp yfx add/3. opp xfx less/2.].`
+Named infix syntax is declared with `syntax[opp yfx add/2. opp xfx less/2.].`
 inside a predicate system's `def` block and is imported with that system.
 The editor reads local import files to discover exported operator declarations;
 open documents' unsaved content is used when available.
 `def arithmetic extends standard := { ... };` inherits predicates and syntax;
 completion includes inherited predicates. Type `extends` for a child-system snippet.
-The editor recognizes result relations (`C = A add B`), nested result
-expressions, operator priorities and associativity. Type `syntax` or `operation`
+The editor recognizes infix calls and compound terms (`C = A add B`),
+operator priorities and associativity. Operators do not evaluate terms. Type `syntax` or `operation`
 for snippets. See `docs/SYNTAX.md` for expansion rules and examples.
 See [the shared parser plan](SHARED-LANGUAGE-PLAN.md) for the future refactor.
 
@@ -133,3 +133,44 @@ def arithmetic := {
 ```
 
 Documentation belongs to each predicate name and arity. Later clauses use the first clause's documentation; blank lines separate comments from definitions. Comments display as plain text. Imported and inherited predicates retain documentation and source locations, including unsaved edits in open library files. Go to Definition also opens the original library file.
+
+## Hidden predicates
+
+Place `% @hidden` on its own line directly above a predicate's comment block or
+first clause to mark that name and arity as internal:
+
+```csp
+def library := {
+    % @hidden
+    helper(X,X).
+    helper(a,b).
+
+    public(A,B) <- helper(A,B).
+};
+```
+
+You can also put `% @hidden helper/2` on its own line anywhere inside the
+defining system. Both forms hide all clauses of `helper/2`, while other arities
+remain visible. The extension omits hidden predicates from hover tips,
+completion, Outline and generated standard-library snippets. Graph predicate
+selection also omits them. Existing hidden graph constraints remain in the
+source and participate in solving.
+
+Tags survive imports and inheritance. An untagged child override is visible;
+a child can explicitly hide an inherited signature with `% @hidden helper/2`.
+Predicates remain callable and checked by diagnostics. Go to Definition remains
+available when navigating an explicit call. These tags control presentation,
+not predicate access.
+
+Unary operators use `opp fx double/1.`, `opp fy repeat/1.`,
+`opp xf finish/1.`, or `opp yf again/1.` within `syntax[...]`.
+Type `syntax-unary` for a declaration snippet. `double 1` constructs
+`double(1)`; `double1` stays an ordinary atom.
+
+Operator expressions accept `(...)`, `[...]`, and `{...}` for grouping,
+including mixed nesting. These groups contain one term; predicate calls
+still use `name(...)`.
+
+Operator declarations accept `w` (separation required) or `w/o` (joined use allowed)
+immediately after `opp`, for example `opp w/o 550 yfx +/2.`.
+Digit prefixes in standard use `w/o`, so `100` constructs `1(0(0))`.

@@ -53,6 +53,7 @@ function activate(context) {
         const result = model(document);
         const offset = document.offsetAt(position);
         const reference = result.references.find(item => item.start <= offset && offset < item.end);
+        if (reference?.hidden && reference.target) return { ...reference.target,hidden:true };
         const target = reference?.target || result.symbols.find(item => item.start <= offset && offset < item.end);
         if (target?.kind === 'predicate' && (!target.filename || target.filename === document.uri.fsPath)) {
             return result.symbols.find(item => item.kind === 'predicate' && item.system === target.system &&
@@ -84,7 +85,7 @@ function activate(context) {
         vscode.languages.registerHoverProvider(language, {
             provideHover(document, position) {
                 const target = at(document, position);
-                if (!target) return;
+                if (!target || target.hidden) return;
                 const text = new vscode.MarkdownString();
                 text.appendCodeblock(target.definition || signature(target), language);
                 if (target.documentation) text.appendText('\n\n' + target.documentation + '\n\n');
@@ -104,7 +105,7 @@ function activate(context) {
                     const output = make(item);
                     if (item.kind === 'system') {
                         output.range = new vscode.Range(document.positionAt(item.start), document.positionAt(item.bodyEnd ?? item.end));
-                        output.children = item.predicates.map(make);
+                        output.children = item.predicates.filter(pred => !pred.hidden).map(make);
                     }
                     return output;
                 });
@@ -132,6 +133,7 @@ function activate(context) {
                 if (system) {
                     const seen = new Set();
                     for (const pred of system.signatures || system.predicates) {
+                        if (pred.hidden) continue;
                         const key = `${pred.name}/${pred.arity}`;
                         if (seen.has(key)) continue;
                         seen.add(key);

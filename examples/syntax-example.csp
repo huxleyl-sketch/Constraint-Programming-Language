@@ -1,12 +1,13 @@
 import standard from (../lib/standard.csp);
 
+
 def arithmetic extends standard := {
-    calculate(A,B,C,N) <- N = A add B mult C.
+    calculate(A,B,C,N) <- *(B,C,T), +(A,T,N).
 };
 
-let A := [2,3];
+let A := [2, 3];
 let B := [4];
 let C := [5];
-let Result := [n(2,2),n(2,3)];
-arithmetic[Result = A add B mult C];
-arithmetic[A less B];
+let Result := [n(2,2), n(2,3)];
+let V1 := [n(2,0)];
+arithmetic[calculate(A,B,C,Result)];

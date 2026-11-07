@@ -1,20 +1,34 @@
 # Standard library
 
 Import the library with `import standard from (./lib/standard.csp);`.
-This also imports its arithmetic and comparison syntax. For example,
-`N = A add B mult C` uses multiplication priority without any local declarations.
-Use `standard[N = A add B];` for a CSP constraint or
-`?- standard:N = 9 add 1.` in the terminal. See [SYNTAX.md](SYNTAX.md).
-Define `def arithmetic extends standard := { ... };` to use all library predicates
-without `standard:` inside the child, for example `total(A,B,N) <- add(A,B,N).`.
-Explicit `standard:add(A,B,N)` remains available.
-The original unit-at-a-time arithmetic is preserved in `lib/legacy/standard-legacy.csp`
-under the system name `standardLegacy`.
+This imports symbolic arithmetic, comparison, list, and digit-prefix syntax.
+Define `def arithmetic extends standard := { ... };` to inherit it.
 
-Numbers are nonnegative decimals: `0` through `9` are digits and
-`n(1,n(2,3))` is 123. Numeric inputs must be ground (fully known).
-Arithmetic results have no leading zeroes. Lists use `nil` and
-`cons(Head,Tail)`, for example `cons(a,cons(b,nil))`.
+In standard, `C = Expression` evaluates a ground numeric expression on the right.
+For example, `C = 2 + 3` returns 5 and `C = 2 + 3 * 4` returns 14
+(as `n(1,4)`). Parentheses override the usual arithmetic priorities.
+Subtraction fails if the result would be negative. The left side may be a
+result variable or a canonical decimal to check. Supply fully known operands;
+this is directional evaluation rather than an inverse arithmetic solver.
+
+Use `equal(A,B)` for structural unification: `equal(R,2 + 3)` binds R to
+`+(2,3)`. Operators still construct terms; standard's `=/2` rules perform
+the evaluation. Explicit `+(A,B,N)` and `fastAdd(A,B,N)` also remain available.
+
+Numbers are nonnegative decimals. `1 9` constructs `1(9)` and `1 2 3`
+constructs `1(2(3))`; arithmetic accepts these as 19 and 123.
+The existing `n(1,n(2,3))` representation is also supported and remains the
+canonical result format. `19` also constructs `1(9)`, because standard declares its digit prefixes with `w/o`.
+Numeric inputs must be ground (fully known).
+
+Lists can use `[a | b | []]`, expanding to `|(a,|(b,nil))`.
+`[H | T]` matches a head and tail; `[[a | []] | []]` contains a nested list.
+The right-associative `|` constructs a pair; `[]` means `nil` in a scope
+that declares or inherits `|`. Nonempty brackets still group one expression:
+`[a,b]` is not list syntax. Always terminate finite lists with `[]` or `nil`.
+The existing `cons(Head,Tail)` lists remain supported. Use the same constructor
+throughout a list; results preserve the input constructor where it is known
+(empty-list cases return the other argument unchanged).
 
 | Predicate | Meaning |
 | --- | --- |
@@ -27,7 +41,7 @@ Arithmetic results have no leading zeroes. Lists use `nil` and
 | `numberEqual(A,B)` | Numeric equality, accepting leading zeroes |
 | `minimum(A,B,N)`, `maximum(A,B,N)` | Select one input; ties return the first |
 | `equal(A,B)` | Structural unification |
-| `=(A,B)` or `A = B` | Structural unification, including results of nested expressions |
+| `=(N,E)` or `N = E` | Evaluate a ground numeric expression E into canonical decimal N |
 | `different(A,B)` | Succeeds when the terms cannot unify |
 | `member(X,L)` | Enumerate members of a known list |
 | `notMember(X,L)` | Check a known value is absent from a known list |

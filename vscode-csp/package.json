@@ -2,7 +2,7 @@
   "name": "constraint-programming-language-highlighting",
   "displayName": "Constraint Programming Language",
   "description": "Syntax highlighting and editor support for this project's .csp language.",
-  "version": "0.3.5",
+  "version": "0.3.14",
   "main": "./extension.js",
   "activationEvents": [
     "onLanguage:constraint-programming-language"

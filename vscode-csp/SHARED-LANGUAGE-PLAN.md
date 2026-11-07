@@ -87,8 +87,8 @@ singleton warnings, completions, hover, definition lookup, and Outline behavior.
 Respect clause-local variables, predicate-system scope, predicate arity, and
 the runtime's inclusive `X^5` expansion into `X0` through `X5`.
 
-Do not confuse recognized tokens with supported syntax: `|` is currently a
-`CON` token but has no dedicated handling in the runtime's statement parser.
+Do not confuse recognized tokens with supported syntax: `|` is now an
+ordinary atom; it can be declared as an operator with `opp yfx |/2.`.
 Do not invent imports, strings, or arithmetic solely for editor convenience.
 
 ## 5. Build and package shared code

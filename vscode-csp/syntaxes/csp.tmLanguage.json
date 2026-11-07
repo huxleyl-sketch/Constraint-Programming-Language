@@ -21,7 +21,7 @@
     },
     {
       "name": "keyword.other.syntax.csp",
-      "match": "\\bsyntax(?=\\s*\\[)|\\b(?:extends|opp|yfx|xfy|xfx)\\b"
+      "match": "\\bsyntax(?=\\s*\\[)|\\b(?:w/o|w|extends|opp|yfx|xfy|xfx|fx|fy|xf|yf)\\b"
     },
     {
       "name": "keyword.declaration.csp",
@@ -29,7 +29,7 @@
     },
     {
       "name": "keyword.operator.csp",
-      "match": ":=|\\^|\\||:|<-|~|[=<>!+*\\/&?\\-]+"
+      "match": ":=|\\^|:|<-|~"
     },
     {
       "name": "variable.language.anonymous.csp",
@@ -41,15 +41,15 @@
     },
     {
       "name": "entity.name.function.csp",
-      "match": "\\b[a-z0-9]\\w*(?=\\s*\\()"
+      "match": "(?:\\b[a-z0-9]\\w*|[=<>!+*\\/&?|\\-$@#\\\\'\"`]+)(?=\\s*\\()"
     },
     {
       "name": "entity.name.type.csp",
       "match": "\\b[a-z0-9]\\w*(?=\\s*(?:\\[|:)|\\s+from\\b)"
     },
     {
-      "name": "string.unquoted.atom.csp",
-      "match": "\\b[a-z0-9]\\w*\\b"
+      "name": "meta.atom.csp",
+      "match": "(?:\\b[a-z0-9]\\w*\\b|[=<>!+*\\/&?|\\-$@#\\\\'\"`]+)"
     },
     {
       "name": "punctuation.section.braces.begin.csp",

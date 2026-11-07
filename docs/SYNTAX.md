@@ -1,66 +1,100 @@
 # Predicate syntax
 
-`syntax[...]` introduces named infix notation. It is expanded into ordinary
-predicate calls before the existing parser and solver run; it adds no arithmetic
-or operator evaluation to the solver.
+`syntax[...]` declares prefix, suffix, and infix notation for compound terms
+and predicate calls. Operators never evaluate their operands or produce implicit results.
 
 ```csp
-def operations := {
+def terms := {
     syntax[
-        opp xfx =/2.
-        opp yfx pred/3.
-        opp xfx otherpred/3.
-        opp xfx related/2.
+        opp 599 xfx =/2.
+        opp 550 yfx +/2.
+        opp 500 yfx */2.
     ].
-    pred(A,B,pair(A,B)).
-    otherpred(A,B,pair(A,B)).
-    related(a,b).
     =(X,X).
+    expression(A,B,C) <- C = A + B.
+    holds(A + B).
 };
 ```
 
-| Written form | Expanded calls |
+| Written form | Expanded form |
 | --- | --- |
-| `A related B` | `related(A,B)` |
-| `C = A pred B` | `pred(A,B,SyntaxValue0), =(C,SyntaxValue0)` |
-| `check(A pred B)` | `pred(A,B,SyntaxValue0), check(SyntaxValue0)` |
-| `C = A pred B pred D` | `pred(A,B,SyntaxValue0), pred(SyntaxValue0,D,SyntaxValue1), =(C,SyntaxValue1)` |
+| `A = B` | `=(A,B)` |
+| `C = A + B` | `=(C,+(A,B))` |
+| `check(A + B)` | `check(+(A,B))` |
+| `C = A + B * D` | `=(C,+(A,*(B,D)))` |
 
-Generated variable names are fresh within the submitted source. Nested
-expressions expand from their operands outward, left operand first. Each
-predicate retains its normal solution order, failure and backtracking behavior.
-`=` is an ordinary user-defined binary relation, not assignment. `standard`
-defines it as `=(X,X).`, which unifies its arguments. Either side can contain
-an expression, such as `A add B = C mult D`. `:=` is reserved for declarations
-such as `let X := [1,2];` and `def system := { ... };`.
+A compound term such as `+(A,B)` is a value, just like `s(A)` or `cons(H,T)`.
+Its functor does not need a predicate definition. At goal position, `A + B`
+calls the binary predicate `+(A,B)`. Ordinary calls such as `+(A,B,N)`
+remain valid, but `/3` operator declarations are rejected.
 
-The original forms `pred(A,B,C)` and `related(A,B)` continue to work.
-Without a declaration, `A related B` is not a named predicate call.
-Symbolic infix calls such as `A = B` also require a syntax declaration.
-Ordinary symbolic predicate calls such as `=(A,B)` need no declaration.
+`=` is an ordinary predicate. Defining `=(X,X).` makes it unify its arguments.
+`:=` is reserved for declarations.
 
 ## Association and priority
 
-- `yfx`: chains associate left, so `A pred B pred C` groups as `(A pred B) pred C`.
-- `xfy`: chains associate right, so `A pred B pred C` groups as `A pred (B pred C)`.
+- `yfx`: chains associate left: `(A + B) + C`.
+- `xfy`: chains associate right: `A + (B + C)`.
 - `xfx`: equal-priority chains require parentheses.
 
-Result operations (`/3`) default to priority 550; binary relations (`/2`)
-default to 599, so relations surround result expressions. An optional integer priority from
-1 through 599 may precede the association; lower numbers bind more tightly:
+Operators default to priority 550. An optional integer from 1 through 599
+precedes the association; lower numbers bind more tightly. Declare equality
+at 599 to surround terms with priority 550. Parentheses, square brackets, and braces override grouping inside expressions.
+Names may be lowercase identifiers, single digits, or symbols such as `+` and `=`.
+Unary forms use arity 1; infix forms use arity 2. Duplicate names are errors,
+so each scope gives a name one operator form.
+Declarations end with `].`, not `];`.
+
+## Prefix and suffix operators
 
 ```csp
 syntax[
-    opp 550 yfx add/3.
-    opp 500 yfx mult/3.
+    opp 500 fx double/1.
+    opp 500 fy repeat/1.
+    opp 500 xf finish/1.
+    opp 500 yf again/1.
 ].
 ```
 
-`N = A add B mult C` expands to `mult(B,C,T), add(A,T,U), =(N,U)`.
-Parentheses override grouping: `N = (A add B) mult C`.
-Operator names may be lowercase identifiers or symbols such as `=`; declarations support arities
-2 and 3. Duplicate declarations are errors. Declaration syntax ends with `].`,
-not `];`. A `/2` declaration is a relation, not a value-producing operation.
+| Form | Example | Expansion |
+| --- | --- | --- |
+| `fx` | `double 1` | `double(1)` |
+| `fy` | `repeat repeat 1` | `repeat(repeat(1))` |
+| `xf` | `1 finish` | `finish(1)` |
+| `yf` | `1 again again` | `again(again(1))` |
+
+`x` requires an operand with strictly tighter priority; `y` permits equal
+priority. Thus `double double 1` and `1 finish finish` require parentheses:
+`double (double 1)` and `(1 finish) finish`. The same priority rules apply
+when mixing unary and infix operators. Explicit calls like `double(1)` still work.
+At goal position these forms call unary predicates; nested forms construct terms.
+They do not perform arithmetic or return implicit results.
+
+For untagged declarations, whitespace separates word operators and operands.
+`double1` remains one atom; use `double 1` or `double(1)`. Adjacent symbolic
+characters stay one atom unless joined matching is enabled with `w/o`
+(see Operator separation below).
+
+## Grouping expressions
+
+Inside expressions, `(...)`, `[...]`, and `{...}` each group one term and
+reset its priority. They can be nested and mixed:
+
+```csp
+C = double [double 1].
+C = double {double 1}.
+C = [1 finish] finish.
+C = {A + B} * D.
+C = double [{double 1}].
+```
+
+Each opener requires its matching closer. In a scope declaring `|`, empty `[]` expands to `nil`; for example,
+`[a | b | []]` constructs `|(a,|(b,nil))` with `opp 580 xfy |/2`.
+Other grouping does not construct a list,
+set, or additional functor. Predicate argument lists still use `name(...)`.
+Outer syntax such as `def system := { ... };`, `let X := [ ... ];`,
+`syntax[ ... ].`, and `system[ ... ];` keeps its existing meaning;
+grouping applies to expressions inside those constructs.
 
 ## Scope and use
 
@@ -72,9 +106,9 @@ Use `extends` to inherit unqualified predicate calls and operator syntax:
 import standard from (./lib/standard.csp);
 
 def arithmetic extends standard := {
-    total(A,B,N) <- add(A,B,N).
-    calculate(A,B,C,N) <- N = A add B mult C.
-    explicit(A,B,N) <- standard:add(A,B,N).
+    total(A,B,N) <- +(A,B,N).
+    calculate(A,B,C,N) <- *(B,C,T), +(A,T,N).
+    explicit(A,B,N) <- standard:+(A,B,N).
 };
 ```
 
@@ -98,24 +132,9 @@ are exported with it. `import operations from (./operations.csp);` imports both
 the predicates and their syntax. Other systems in that file keep their syntax
 private unless they too are imported.
 
-An operator from an imported system expands to a qualified call to its owner.
-For example, importing `standard` makes `N = A add B` expand to
-`standard:add(A,B,T), standard : =(N,T)` inside a different system. No forwarding rule is needed.
-In its owning system, it remains an ordinary unqualified call.
-
-```csp
-import standard from (./lib/standard.csp);
-def calculation := {
-    total(A,B,N) <- N = A add B.
-};
-```
-
-In the terminal:
-
-```text
-?- calculation:N = 9 add 1.
-% N = n(1,0).
-```
+An infix goal from an imported system calls the predicate in that system.
+Nested infix expressions construct unqualified compound terms; they do not call
+predicates in the exporting system.
 
 Each system can give the same operator name a different priority or association.
 A system's own declarations take precedence in its rules, its bracket
@@ -130,19 +149,69 @@ for subsequent statements and queries until the file/session is replaced.
 Top-level `syntax[...]` is retained for compatibility as file-local syntax;
 it takes precedence over imported syntax but is not exported with any system.
 
-Expressions work in rule bodies, predicate arguments, terminal queries, and
-CSP bracket constraints, including `calculation[N = A add B];`.
-CSP operands and results are declared variables with domains. Complex queries
-and constraints expand into ordinary auxiliary predicate definitions;
-these helpers do not add CSP variables or domains. Console helpers are temporary.
-
-Keep clause heads and domain declarations as ordinary terms. Expressions nested
-under negation must be moved into a named wrapper predicate, then negate that
-wrapper. This preserves negation's variable scope. Numeric operators retain
-the ground-input requirements of the predicates they call.
+Infix terms work in clause heads, predicate arguments, negated goals, domains,
+queries, and CSP bracket constraints. Only the outermost goal is called.
+Arithmetic uses explicit predicate calls, such as `+(A,B,N)` or
+`*(B,C,T), +(A,T,N)`. No result arguments or auxiliary computation goals
+are generated from infix terms.
 
 Commas remain optional between ordinary arguments and goals. Use commas when
 an operator name at a boundary could also be read as the next infix operator.
 
-See [syntax-example.csp](../examples/syntax-example.csp) for inherited arithmetic syntax,
-multiplication priority, and CSP constraints in one runnable file.
+See [syntax-example.csp](../examples/syntax-example.csp) for explicit arithmetic calls,
+inheritance, and CSP constraints in one runnable file.
+
+Single digits can be prefix operators: `opp 300 fy 1/1.` makes `1 9`
+construct `1(9)`. Declare each digit to allow longer chains. `standard`
+exports all ten digit prefixes and accepts them as decimal arithmetic inputs;
+results still use canonical `n` terms. Use commas between numeric arguments:
+`p(1,9)` has two arguments, while `p(1 9)` has one with these declarations.
+
+## Operator separation
+
+Use an optional tag immediately after `opp`:
+
+```csp
+syntax[
+    opp w xfx in/2.
+    opp w/o 550 yfx +/2.
+    opp w/o 300 fy 1/1.
+].
+```
+
+`w` requires separation on both sides: whitespace, comments, the start/end of
+an expression, or structural delimiters such as parentheses and commas.
+Thus `a in b` and `(a)in(b)` use `in`, while `thing` remains an atom.
+`w/o` permits joined spelling as well as spaced spelling. For example, `A+B`
+constructs `+(A,B)`, and `11` constructs `1(1)` with the digit declaration.
+
+Joined matches are tried longest first, with the declared prefix, suffix, or
+infix form and precedence checked during parsing. If a choice leaves an invalid
+expression, shorter matching operator names are retried. For example, `<=`
+is preferred to `<` followed by `=` when both interpretations are possible.
+
+Variable identifiers and explicit functor names retain their identities:
+`Result11` remains a variable, and `name(...)` remains an explicit call.
+Unclaimed characters retain the existing atom representation; this change does
+not implicitly turn ordinary names into lists of characters. Declarations without
+a tag preserve their existing token-based behavior. Syntax tags are exported
+and inherited with their operators.
+
+In standard, all digit prefixes and symbolic operators use `w/o`; word operators
+use `w`. Consequently `100` constructs `1(0(0))`, and `C=19+1` evaluates to
+`n(2,0)`. Separate numeric arguments with commas.
+
+## Symbol characters
+
+All ASCII punctuation not reserved by the language can be used in atom and
+operator names. Alongside the existing arithmetic symbols, this includes `$`,
+`@`, `#`, backslash, single quote, double quote, and backtick. Quotes are ordinary
+symbol characters here; they do not introduce strings or quoted atoms.
+
+Whitespace, brackets `()[]{}`, comma, period, semicolon, colon, `%` comments,
+`~` negation, `^` families, and `_` wildcards remain reserved. The structural
+sequences `:=` and `<-` retain their existing meanings.
+
+For example, `opp w/o 300 fy $/1.` permits `$100` to construct
+`$(1(0(0)))` in standard's scope. Declaring this notation does not itself
+implement spreading or atom decomposition.

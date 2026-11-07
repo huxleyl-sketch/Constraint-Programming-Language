@@ -58,9 +58,22 @@ test('providers activate, publish diagnostics, resolve definitions, and complete
     assert.ok(providers.Hover.provideHover(document, new Position(0, queryOffset)));
     assert.ok(subscriptions.length >= 8);
 
+    document.getText = () => 'def visibility := {\n % @hidden\n helper(a).\n public(a).\n call(X) <- helper(X).\n};';
+    document.version++;
+    providers.change({ document });
+    const helperPosition = new Position(0,document.getText().lastIndexOf('helper('));
+    assert.equal(providers.Hover.provideHover(document,helperPosition),undefined);
+    assert.ok(providers.Definition.provideDefinition(document,helperPosition));
+    const visibleCompletions = providers.CompletionItem.provideCompletionItems(document,helperPosition);
+    assert.ok(!visibleCompletions.some(item => item.label === 'helper'));
+    assert.ok(visibleCompletions.some(item => item.label === 'public'));
+    const outline = providers.DocumentSymbol.provideDocumentSymbols(document);
+    assert.ok(!outline[0].children.some(item => item.name === 'helper/1'));
+    assert.equal(published.length,0);
+
     const path = require('node:path');
     document.uri.fsPath = path.resolve(__dirname,'../../tests/fixtures/syntax-import.csp');
-    document.getText = () => fs.readFileSync(document.uri.fsPath,'utf8');
+    document.getText = () => 'import arithmetic from (../../examples/syntax-example.csp); let A := [2]; let B := [4]; let C := [5]; let Result := [n(2,2)]; arithmetic[Result = A + B * C];';
     document.version++;
     providers.change({ document });
     assert.equal(published.length,0,'nested imports supply syntax to the editor');
@@ -68,7 +81,7 @@ test('providers activate, publish diagnostics, resolve definitions, and complete
     const librarySource = fs.readFileSync(libraryPath,'utf8');
     const libraryDocument = { ...document, version:1,
         uri: { fsPath:libraryPath, toString:()=>libraryPath },
-        getText:()=>librarySource.replace('opp yfx add/3.','') };
+        getText:()=>librarySource.replace(/opp (?:w\/o )?yfx \+\/2\./,'') };
     vscode.workspace.textDocuments.unshift(libraryDocument);
     providers.change({ document:libraryDocument });
     assert.ok(published.some(item=>item.severity === 0),'unsaved removal of exported syntax updates the importer');
@@ -85,18 +98,28 @@ test('providers activate, publish diagnostics, resolve definitions, and complete
     assert.match(hover.contents.value, /Unify both inputs/);
     assert.doesNotMatch(hover.contents.value, /Later comment/);
 
-    document.getText = () => 'import standard from (../../lib/standard.csp); def arithmetic extends standard := { total(A,B,N) <- N = A add B. };';
+    document.getText = () => 'import standard from (../../lib/standard.csp); def arithmetic extends standard := { total(A,B,N) <- +(A,B,N). };';
     document.version++;
     providers.change({ document });
-    const importedHover = providers.Hover.provideHover(document, new Position(0, document.getText().lastIndexOf('add')));
-    assert.match(importedHover.contents.value, /add\(A,B,N\) <- fastAdd\(A,B,N\)\./);
+    const importedHover = providers.Hover.provideHover(document, new Position(0, document.getText().lastIndexOf('+')));
+    assert.match(importedHover.contents.value, /\+\(A,B,N\) <- fastAdd\(A,B,N\)\./);
     assert.match(importedHover.contents.value, /Arithmetic aliases and comparisons require ground decimal operands/);
     vscode.workspace.openTextDocument = async uri => {
         assert.equal(uri.fsPath, libraryPath);
         return libraryDocument;
     };
-    const importedDefinition = await providers.Definition.provideDefinition(document, new Position(0, document.getText().lastIndexOf('add')));
+    const importedDefinition = await providers.Definition.provideDefinition(document, new Position(0, document.getText().lastIndexOf('+')));
     assert.equal(importedDefinition.uri.fsPath, libraryPath);
-    assert.equal(importedDefinition.range.start.character, librarySource.indexOf('add(A,B,N) <- fastAdd'));
+    assert.equal(importedDefinition.range.start.character, librarySource.indexOf('+(A,B,N) <- fastAdd'));
+
+    libraryDocument.getText = () => librarySource.replace('def standard := {','def standard := {\n% @hidden fastAdd/3');
+    libraryDocument.version++;
+    document.getText = () => 'import standard from (../../lib/standard.csp); def arithmetic extends standard := { total(A,B,N) <- fastAdd(A,B,N). };';
+    document.version++;
+    providers.change({ document });
+    const inheritedPosition = new Position(0,document.getText().lastIndexOf('fastAdd'));
+    assert.equal(providers.Hover.provideHover(document,inheritedPosition),undefined);
+    assert.ok(!providers.CompletionItem.provideCompletionItems(document,inheritedPosition).some(item=>item.label === 'fastAdd'));
+    assert.equal(published.length,0);
 
 });

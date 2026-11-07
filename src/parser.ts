@@ -8,6 +8,7 @@ interface CspImports {
 }
 
 function parser(code: string, system: constraintSystem, imports?: CspImports) {
+    const hidden = hiddenPredicateTags(code);
     const syntax = new Map(system.syntax);
     const modules = imports?.modules ?? new Map<string, constraintSystem>();
     const stack = imports?.stack ?? (imports ? [imports.filename] : []);
@@ -70,6 +71,7 @@ function parser(code: string, system: constraintSystem, imports?: CspImports) {
                 declarations.add(name);
                 var preds = resolve(def.rhs?.[0]?.rhs);
                 var sys = new predicateSystem(name => system.getPredicateSystem(name));
+                sys.hiddenPredicates = new Set(hidden.get(name));
                 sys.parentName = environment.parents?.get(name);
                 sys.syntax = new Map(environment.systems.get(name));
                 system.addPredicateSystem(name, parsePreds(preds, sys));
@@ -107,6 +109,40 @@ function parser(code: string, system: constraintSystem, imports?: CspImports) {
         }
     }
     system.syntax = syntax;
+}
+
+/** Presentation metadata, scoped to the original source rather than expanded syntax. */
+function hiddenPredicateTags(source: string): Map<string,Set<string>> {
+    const result = new Map<string,Set<string>>();
+    let owner: string | undefined, depth = 0;
+    for (const match of source.matchAll(/%[^\r\n]*|\bdef\s+([a-z0-9]\w*)(?:\s+extends\s+[a-z0-9]\w*)?\s*:=\s*\{|[{}]/g)) {
+        if (match[1]) { owner = match[1]; depth = 1; continue; }
+        if (match[0] === '{') { depth++; continue; }
+        if (match[0] === '}') { if (--depth === 0) owner = undefined; continue; }
+        if (!owner || !/^%\s*@hidden(?:\s|$)/.test(match[0])) continue;
+        const explicit = /^%\s*@hidden\s+(\S+)\/(\d+)\s*$/.exec(match[0]);
+        let signature = explicit ? `${explicit[1]}/${Number(explicit[2])}` : undefined;
+        if (!signature && /^%\s*@hidden\s*$/.test(match[0])) {
+            const tail = source.slice(match.index + match[0].length).replace(/^(?:\s+|%[^\r\n]*)*/, '');
+            const head = /^(?:[a-z0-9]\w*|[=<>!+*\/&?|\-$@#\\'"`]+)\s*\(/.exec(tail);
+            if (head) {
+                let nesting = 1, end = head[0].length;
+                for (; end < tail.length && nesting; end++) {
+                    if (tail[end] === '(') nesting++;
+                    if (tail[end] === ')') nesting--;
+                }
+                try {
+                    const pred = interpreter(tail.slice(0,end))[0];
+                    if (pred?.kind === 'PRED') signature = `${pred.lhs?.[0]?.match}/${pred.rhs?.length ?? 0}`;
+                } catch { /* Incomplete source is reported by the language parser. */ }
+            }
+        }
+        if (signature) {
+            if (!result.has(owner)) result.set(owner,new Set());
+            result.get(owner)?.add(signature);
+        }
+    }
+    return result;
 }
 
 /** Compile generated conjunctions as ordinary definitions with the original lookup scope. */

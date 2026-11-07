@@ -7,7 +7,7 @@ for (const file of ['src/tokeniser','src/parser','src/predicateSolverExpr','src/
     vm.runInContext(fs.readFileSync(`dist/${file}.js`,'utf8'),context);
 }
 vm.runInContext(`
-    const source = 'def base := { syntax[opp yfx combine/3.]. combine(A,B,pair(A,B)). '
+    const source = 'def base := { syntax[opp yfx combine/2.]. combine(A,B,pair(A,B)). '
         + 'value(parent). value(a,b). inherited(X) <- value(X). }; '
         + 'def child extends base := { value(child). local(A,B,R) <- combine(A,B,R). '
         + 'explicit(X) <- base:value(X). }; def grandchild extends child := {}; '
@@ -24,7 +24,7 @@ vm.runInContext(`
     assert.equal(session.execute('?- grandchild:value(X).'),'X = child.');
     assert.equal(session.execute('?- caller:call(X).'),'X = child.');
     assert.equal(session.execute('?- grandchild:combine(a,b,R).'),'R = pair(a, b).');
-    assert.equal(session.execute('?- grandchild:combine(a,b,a combine b).'),'true.');
+    assert.equal(session.execute('?- grandchild:combine(a,b,pair(a,b)).'),'true.');
     const forward = new constraintSystem(Dfs);
     parser('def child extends base := {}; def base := { ok(a). };',forward);
     assert.equal(new PrologConsole(forward).execute('?- child:ok(a).'),'true.');

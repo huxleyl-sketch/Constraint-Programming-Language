@@ -13,16 +13,17 @@ def arithmetic extends standard := { total(A,B,N) <- add(A,B,N). };
 ```
 
 The child inherits predicates and syntax. Explicit standard:add(A,B,N) still works.
-Declare with `syntax[opp xfx =/2. opp yfx add/3. opp xfx less/2.]`.
-`C = A add B` expands to `add(A,B,T), =(C,T)`; `A less B` expands to `less(A,B)`.
+Declare with `syntax[opp 599 xfx =/2. opp yfx add/2. opp xfx less/2.]`.
+`C = A add B` expands to `=(C,add(A,B))`; `A less B` expands to `less(A,B)`.
 
 ## Decimal arithmetic
 
 Decimal arithmetic is provided in `standard.csp`.
 See [STANDARD.md](STANDARD.md) for the full library, list operations, and `allDiff` examples.
-Original arithmetic is preserved as standardLegacy in `lib/legacy/standard-legacy.csp`.
 Import with: import standard from (./lib/standard.csp);
-Digits are atoms 0 through 9; n(1,n(2,3)) represents 123.
+Digits are atoms 0 through 9; `1 2 3` and `n(1,n(2,3))` represent 123.
+Digit prefixes require commas between separate numeric arguments.
+Lists use `[a | b | []]`; nested brackets delimit nested lists.
 fastAdd(A,B,N) and fastMult(A,B,N) require ground nonnegative decimal
 inputs A and B. N may be a result variable or a known result to check.
 They use digit addition with carry and long multiplication, respectively,

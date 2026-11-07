@@ -4,6 +4,16 @@ type Dep = { pred: Expr; args: readonly Expr[]; not: boolean; systemName?: strin
 type Deps = Dep[];
 
 class predicateSystem {
+    hiddenPredicates = new Set<string>();
+    predicateNames(): string[] {
+        const parent = this.parentName && this.resolveSystem ? this.resolveSystem(this.parentName) : undefined;
+        return [...new Set([...Object.keys(this.preds.map),...parent?.predicateNames() ?? []])];
+    }
+    isHiddenPredicate(name: string, arity: number): boolean {
+        if (this.hiddenPredicates.has(`${name}/${arity}`)) return true;
+        if (this.preds.get(name)?.defs.some(def => def.args.length === arity)) return false;
+        return !!(this.parentName && this.resolveSystem?.(this.parentName).isHiddenPredicate(name,arity));
+    }
     parentName: string | undefined;
     syntax: SyntaxOperators = new Map();
     preds: Lookup<predicate>;
